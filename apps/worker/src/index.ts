@@ -50,7 +50,8 @@ import { messageTemplates } from './routes/message-templates.js';
 export type Env = {
   Bindings: {
     DB: D1Database;
-    IMAGES: R2Bucket;
+    SUPABASE_URL: string;
+    SUPABASE_SERVICE_KEY: string;
     ASSETS: Fetcher;
     LINE_CHANNEL_SECRET: string;
     LINE_CHANNEL_ACCESS_TOKEN: string;

@@ -3,10 +3,21 @@ import type { Env } from '../index.js';
 
 const images = new Hono<Env>();
 
+const BUCKET = 'line-harness-images';
+
+function storageUrl(supabaseUrl: string, key: string): string {
+  return `${supabaseUrl}/storage/v1/object/${BUCKET}/${key}`;
+}
+
+function publicUrl(supabaseUrl: string, key: string): string {
+  return `${supabaseUrl}/storage/v1/object/public/${BUCKET}/${key}`;
+}
+
 // POST /api/images — upload image (base64 or binary)
 images.post('/api/images', async (c) => {
   try {
     const contentType = c.req.header('Content-Type') || '';
+    const { SUPABASE_URL, SUPABASE_SERVICE_KEY } = c.env;
 
     let data: ArrayBuffer;
     let mimeType: string;
@@ -52,16 +63,25 @@ images.post('/api/images', async (c) => {
 
     const ext = mimeType.split('/')[1] === 'jpeg' ? 'jpg' : mimeType.split('/')[1];
     const id = crypto.randomUUID();
-    const key = `${id}.${ext}`;
+    const key = filename ? `${id}-${filename}` : `${id}.${ext}`;
 
-    await c.env.IMAGES.put(key, data, {
-      httpMetadata: { contentType: mimeType },
-      customMetadata: { originalFilename: filename ?? key },
+    const res = await fetch(storageUrl(SUPABASE_URL, key), {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`,
+        'Content-Type': mimeType,
+        'x-upsert': 'false',
+      },
+      body: data,
     });
 
-    const workerUrl = c.env.WORKER_URL || new URL(c.req.url).origin;
-    const url = `${workerUrl}/images/${key}`;
+    if (!res.ok) {
+      const err = await res.text();
+      console.error('Supabase Storage upload error:', err);
+      return c.json({ success: false, error: 'Upload failed' }, 500);
+    }
 
+    const url = publicUrl(SUPABASE_URL, key);
     return c.json({
       success: true,
       data: { id, key, url, mimeType, size: data.byteLength },
@@ -72,28 +92,33 @@ images.post('/api/images', async (c) => {
   }
 });
 
-// GET /images/:key — serve image (public, no auth)
-images.get('/images/:key', async (c) => {
+// GET /images/:key — redirect to Supabase CDN (bucket must be public)
+images.get('/images/:key', (c) => {
   const key = c.req.param('key');
-  const object = await c.env.IMAGES.get(key);
-
-  if (!object) {
-    return c.json({ success: false, error: 'Image not found' }, 404);
-  }
-
-  const headers = new Headers();
-  headers.set('Content-Type', object.httpMetadata?.contentType || 'image/png');
-  headers.set('Cache-Control', 'public, max-age=31536000, immutable');
-  headers.set('ETag', object.etag);
-
-  return new Response(object.body, { headers });
+  return c.redirect(publicUrl(c.env.SUPABASE_URL, key), 302);
 });
 
-// DELETE /api/images/:key — delete image
+// DELETE /api/images/:key — delete image from Supabase Storage
 images.delete('/api/images/:key', async (c) => {
   try {
     const key = c.req.param('key');
-    await c.env.IMAGES.delete(key);
+    const { SUPABASE_URL, SUPABASE_SERVICE_KEY } = c.env;
+
+    const res = await fetch(`${SUPABASE_URL}/storage/v1/object/${BUCKET}`, {
+      method: 'DELETE',
+      headers: {
+        Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ prefixes: [key] }),
+    });
+
+    if (!res.ok) {
+      const err = await res.text();
+      console.error('Supabase Storage delete error:', err);
+      return c.json({ success: false, error: 'Delete failed' }, 500);
+    }
+
     return c.json({ success: true, data: null });
   } catch (err) {
     console.error('DELETE /api/images/:key error:', err);

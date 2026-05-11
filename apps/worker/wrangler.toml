@@ -18,9 +18,10 @@ binding = "DB"
 database_name = "line-harness"
 database_id = "YOUR_DEV_D1_DATABASE_ID"
 
-[[r2_buckets]]
-binding = "IMAGES"
-bucket_name = "line-harness-images"
+# R2 removed — image storage moved to Supabase Storage
+# [[r2_buckets]]
+# binding = "IMAGES"
+# bucket_name = "line-harness-images"
 
 [triggers]
 crons = ["*/5 * * * *"]
@@ -42,9 +43,10 @@ binding = "DB"
 database_name = "line-crm"
 database_id = "YOUR_D1_DATABASE_ID"
 
-[[env.production.r2_buckets]]
-binding = "IMAGES"
-bucket_name = "line-harness-images"
+# R2 removed — image storage moved to Supabase Storage
+# [[env.production.r2_buckets]]
+# binding = "IMAGES"
+# bucket_name = "line-harness-images"
 
 [env.production.triggers]
 crons = ["*/5 * * * *"]
