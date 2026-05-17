@@ -1,0 +1,389 @@
+{
+  "name": "AI LINE CRM MVP Blueprint",
+  "version": "0.1.0",
+  "description": "LINE official account CRM blueprint for AI practical use, AI agents, training, workshops, and consultation lead nurturing.",
+  "assumptions": {
+    "primaryConversion": "個別相談予約",
+    "secondaryConversions": ["AIブートキャンプ案内閲覧", "勉強会申込", "導入相談フォーム送信"],
+    "mvpPolicy": "初期は共通7日間ステップ配信を主軸にし、目的タグ追加で補助シナリオを開始する。",
+    "externalUrls": {
+      "guideIndex": "https://example.com/ai-guide",
+      "booking": "https://example.com/booking",
+      "bootcamp": "https://example.com/ai-bootcamp",
+      "workshop": "https://example.com/workshop",
+      "cases": "https://example.com/cases",
+      "pricing": "https://example.com/pricing"
+    }
+  },
+  "funnelStages": [
+    {
+      "stage": "Stage 1",
+      "name": "LINE登録",
+      "goal": "SNS、note、LP、セミナーから見込み客をLINEへ集約する。"
+    },
+    {
+      "stage": "Stage 2",
+      "name": "目的選択",
+      "goal": "初回診断で目的タグと温度感の初期値を付与する。"
+    },
+    {
+      "stage": "Stage 3",
+      "name": "特典受け取り",
+      "goal": "目的別の無料特典で課題認識を高める。"
+    },
+    {
+      "stage": "Stage 4",
+      "name": "Tips/事例で教育",
+      "goal": "AI活用の理解、業務分解、導入イメージを形成する。"
+    },
+    {
+      "stage": "Stage 5",
+      "name": "勉強会・無料相談へ誘導",
+      "goal": "低ハードル参加または高温度リードの商談化へ接続する。"
+    },
+    {
+      "stage": "Stage 6",
+      "name": "ヒアリング",
+      "goal": "課題、希望成果、時期、法人/個人を整理する。"
+    },
+    {
+      "stage": "Stage 7",
+      "name": "提案",
+      "goal": "講座、顧問、研修、AIエージェント導入支援に振り分ける。"
+    },
+    {
+      "stage": "Stage 8",
+      "name": "成約",
+      "goal": "AIブートキャンプ、個別AI講座、法人研修、導入支援、顧問契約へ接続する。"
+    }
+  ],
+  "tags": [
+    { "name": "興味_AI初心者", "color": "#60A5FA" },
+    { "name": "興味_実務活用", "color": "#2563EB" },
+    { "name": "興味_AIエージェント", "color": "#7C3AED" },
+    { "name": "興味_業務自動化", "color": "#0891B2" },
+    { "name": "興味_AI講座", "color": "#F59E0B" },
+    { "name": "興味_AIブートキャンプ", "color": "#F97316" },
+    { "name": "興味_勉強会", "color": "#22C55E" },
+    { "name": "興味_法人研修", "color": "#14B8A6" },
+    { "name": "興味_資料制作", "color": "#A855F7" },
+    { "name": "興味_EC_AI", "color": "#0EA5E9" },
+    { "name": "課題_何から始めるかわからない", "color": "#93C5FD" },
+    { "name": "課題_仕事で使えない", "color": "#38BDF8" },
+    { "name": "課題_業務効率化", "color": "#06B6D4" },
+    { "name": "課題_自動化", "color": "#2DD4BF" },
+    { "name": "課題_社内導入", "color": "#10B981" },
+    { "name": "課題_営業自動化", "color": "#84CC16" },
+    { "name": "課題_資料作成", "color": "#EAB308" },
+    { "name": "課題_SNS運用", "color": "#EC4899" },
+    { "name": "課題_EC運用", "color": "#F43F5E" },
+    { "name": "課題_AI人材育成", "color": "#8B5CF6" },
+    { "name": "温度_低", "color": "#9CA3AF" },
+    { "name": "温度_中", "color": "#FBBF24" },
+    { "name": "温度_高", "color": "#EF4444" },
+    { "name": "商談候補", "color": "#DC2626" },
+    { "name": "資料請求済", "color": "#6366F1" },
+    { "name": "勉強会参加済", "color": "#16A34A" },
+    { "name": "相談予約済", "color": "#B91C1C" },
+    { "name": "成約済", "color": "#15803D" },
+    { "name": "商品_AIブートキャンプ", "color": "#EA580C" },
+    { "name": "商品_個別AI講座", "color": "#D97706" },
+    { "name": "商品_AI顧問", "color": "#7F1D1D" },
+    { "name": "商品_AI研修", "color": "#0F766E" },
+    { "name": "商品_AIエージェント導入", "color": "#6D28D9" },
+    { "name": "商品_業務改善支援", "color": "#0E7490" }
+  ],
+  "forms": [
+    {
+      "name": "AI相談ヒアリングフォーム",
+      "description": "個別相談、導入相談、講座相談の前に最低限の状況を確認するMVPフォーム。",
+      "saveToMetadata": true,
+      "fields": [
+        { "name": "name", "label": "お名前", "type": "text", "required": true },
+        {
+          "name": "customer_type",
+          "label": "区分",
+          "type": "select",
+          "required": true,
+          "options": ["個人", "法人", "個人事業主", "未定"]
+        },
+        {
+          "name": "topic",
+          "label": "相談内容",
+          "type": "select",
+          "required": true,
+          "options": ["AIを仕事で使いたい", "業務効率化を相談したい", "AIエージェントを導入したい", "AI研修を依頼したい", "AI講座を受けたい", "まだ整理できていないので壁打ちしたい"]
+        },
+        { "name": "current_issue", "label": "現在の課題", "type": "textarea", "required": true },
+        {
+          "name": "preferred_contact",
+          "label": "希望する相談方法",
+          "type": "select",
+          "required": true,
+          "options": ["Zoom", "LINEで相談", "メール", "未定"]
+        }
+      ],
+      "onSubmitTagName": "商談候補",
+      "onSubmitMessageType": "text",
+      "onSubmitMessageContent": "ご入力ありがとうございます。内容を確認し、最適な進め方をご案内します。具体的な相談をご希望の場合は、予約ページから日程をお選びください。"
+    }
+  ],
+  "scenarios": [
+    {
+      "name": "AI CRM 共通7日間ナーチャリング",
+      "description": "友だち追加直後に目的選択、無料特典、Tips、勉強会、個別相談へ接続するMVP共通シナリオ。",
+      "triggerType": "friend_add",
+      "steps": [
+        {
+          "delayMinutes": 0,
+          "messageType": "text",
+          "messageContent": "友だち追加ありがとうございます！\n\nこのLINEでは、AIの実務活用・AIエージェント導入・業務改善・AI講座に関する情報をお届けしています。\n\nあなたの目的に合わせて、活用ガイド・事例・勉強会・個別相談の案内をお送りします。\n\nまず、今いちばん近いものを選んでください。\n\n1. AIを仕事で使えるようになりたい\n2. AIエージェント導入を相談したい\n3. 業務効率化・自動化を相談したい\n4. AIブートキャンプに興味がある\n5. 個別相談・個別講座を受けたい\n6. 勉強会・ワークショップに参加したい\n7. 活用ガイドやテンプレートがほしい\n8. まず質問したい\n\n数字または近い言葉で返信してください。"
+        },
+        {
+          "delayMinutes": 1440,
+          "messageType": "text",
+          "messageContent": "AIを学んでも仕事が楽にならない理由は、ツールの知識不足ではなく、業務を分解できていないことにあります。\n\nまずは、自分の業務の中でAIに任せられる作業を見つけることが大切です。\n\n業務分解チェックリストはこちら：\nhttps://example.com/ai-work-breakdown"
+        },
+        {
+          "delayMinutes": 2880,
+          "messageType": "text",
+          "messageContent": "明日から使えるAI活用例を3つ紹介します。\n\n1. メール返信の下書き\n2. SNS投稿の構成作成\n3. 議事録の要約とタスク整理\n\nまずは、毎日繰り返している作業からAI化してみましょう。\n\nプロンプトテンプレートはこちら：\nhttps://example.com/prompt-templates"
+        },
+        {
+          "delayMinutes": 2880,
+          "messageType": "text",
+          "messageContent": "AI活用は、個人の作業効率化だけでなく、問い合わせ対応、リサーチ、営業リスト作成、提案資料作成、社内ナレッジ検索にも広げられます。\n\n導入事例はこちら：\nhttps://example.com/cases"
+        },
+        {
+          "delayMinutes": 2880,
+          "messageType": "text",
+          "messageContent": "週1回、実務で使えるAI活用をテーマにした勉強会を開催予定です。\n\nChatGPT、Claude、Gemini、AIエージェントなど、実際の仕事にどう落とし込むかを中心に扱います。\n\n次回の勉強会はこちら：\nhttps://example.com/workshop"
+        },
+        {
+          "delayMinutes": 1440,
+          "messageType": "text",
+          "messageContent": "実務でAIを使えるようになりたい方向けに、短期集中のAIブートキャンプを用意しています。\n\nAIを触って終わりではなく、自分の仕事で使えるワークフローに落とし込む内容です。\n\n詳細はこちら：\nhttps://example.com/ai-bootcamp"
+        },
+        {
+          "delayMinutes": 1440,
+          "messageType": "text",
+          "messageContent": "自分の仕事に合わせたAI活用方法を知りたい方は、個別相談をご利用ください。\n\n現在の業務を整理しながら、どこにAIを使えるか、どこから自動化できるかを一緒に設計します。\n\n個別相談はこちら：\nhttps://example.com/booking"
+        }
+      ]
+    },
+    {
+      "name": "AIエージェント導入相談フォロー",
+      "description": "AIエージェント、業務自動化、法人導入に関心がある高温度リード向け。",
+      "triggerType": "tag_added",
+      "triggerTagName": "興味_AIエージェント",
+      "steps": [
+        {
+          "delayMinutes": 0,
+          "messageType": "text",
+          "messageContent": "AIエージェント導入に興味がある方向けに、まずは導入前チェックリストをお送りします。\n\n導入前チェックリスト：\nhttps://example.com/agent-checklist"
+        },
+        {
+          "delayMinutes": 1440,
+          "messageType": "text",
+          "messageContent": "AIエージェント導入で最初に考えるべきことは、どのツールを使うかではなく、どの業務を任せるかです。\n\n自動化できる業務例はこちら：\nhttps://example.com/automation-use-cases"
+        },
+        {
+          "delayMinutes": 2880,
+          "messageType": "text",
+          "messageContent": "AIエージェント化しやすい業務例：\n・問い合わせ対応\n・リサーチ\n・営業リスト作成\n・提案資料作成\n・議事録整理\n・社内ナレッジ検索\n\n導入相談はこちら：\nhttps://example.com/booking"
+        },
+        {
+          "delayMinutes": 2880,
+          "messageType": "text",
+          "messageContent": "自社にAIエージェントを導入できるか知りたい方は、無料の初回ヒアリングをご利用ください。\n\n無料相談を予約する：\nhttps://example.com/booking"
+        }
+      ]
+    },
+    {
+      "name": "勉強会・ワークショップ参加フォロー",
+      "description": "勉強会やワークショップに関心があるリードを参加、参加後フォロー、個別講座へ接続する。",
+      "triggerType": "tag_added",
+      "triggerTagName": "興味_勉強会",
+      "steps": [
+        {
+          "delayMinutes": 0,
+          "messageType": "text",
+          "messageContent": "AI勉強会に興味を持っていただきありがとうございます。\n\n週1回、実務で使えるAI活用をテーマに、初心者でも参加しやすい勉強会を開催しています。\n\n次回の勉強会はこちら：\nhttps://example.com/workshop"
+        },
+        {
+          "delayMinutes": 2880,
+          "messageType": "text",
+          "messageContent": "勉強会では、ただAIツールを紹介するだけではなく、実際の業務にどう使うかまで解説します。\n\n参加はこちら：\nhttps://example.com/workshop"
+        },
+        {
+          "delayMinutes": 2880,
+          "messageType": "text",
+          "messageContent": "もっと個別に学びたい方には、個別AI講座もご案内しています。\n\n個別講座を見る：\nhttps://example.com/ai-bootcamp"
+        }
+      ]
+    }
+  ],
+  "autoReplies": [
+    {
+      "keyword": "1",
+      "matchType": "exact",
+      "responseType": "text",
+      "tagNames": ["興味_実務活用", "課題_何から始めるかわからない", "温度_中"],
+      "responseContent": "AIを仕事で使えるようになりたい方向けに、まずはChatGPT実務活用スタートガイドをご案内します。\n\nガイドはこちら：\nhttps://example.com/ai-guide"
+    },
+    {
+      "keyword": "2",
+      "matchType": "exact",
+      "responseType": "text",
+      "tagNames": ["興味_AIエージェント", "興味_業務自動化", "温度_高", "商談候補"],
+      "responseContent": "AIエージェント導入を検討中ですね。\n\nまずは導入前チェックリストで、任せる業務・必要データ・導入ステップを整理するのがおすすめです。\n\nチェックリストはこちら：\nhttps://example.com/agent-checklist"
+    },
+    {
+      "keyword": "3",
+      "matchType": "exact",
+      "responseType": "text",
+      "tagNames": ["興味_業務自動化", "課題_業務効率化", "温度_高", "商談候補"],
+      "responseContent": "業務効率化・自動化の相談ですね。\n\nまずは、今の業務を分解してAI化しやすい作業を見つけるところから始めます。\n\n業務分解チェックリストはこちら：\nhttps://example.com/ai-work-breakdown"
+    },
+    {
+      "keyword": "4",
+      "matchType": "exact",
+      "responseType": "text",
+      "tagNames": ["興味_AI講座", "興味_AIブートキャンプ", "商品_AIブートキャンプ", "温度_中"],
+      "responseContent": "AIブートキャンプに興味を持っていただきありがとうございます。\n\n実務で使えるAI活用を短期集中で身につける講座です。\n\n詳細はこちら：\nhttps://example.com/ai-bootcamp"
+    },
+    {
+      "keyword": "5",
+      "matchType": "exact",
+      "responseType": "text",
+      "tagNames": ["商品_個別AI講座", "温度_高", "商談候補"],
+      "responseContent": "個別相談・個別講座をご希望ですね。\n\n現在の業務や学びたい内容に合わせて、最適な進め方をご提案します。\n\n予約はこちら：\nhttps://example.com/booking"
+    },
+    {
+      "keyword": "6",
+      "matchType": "exact",
+      "responseType": "text",
+      "tagNames": ["興味_勉強会", "温度_中"],
+      "responseContent": "勉強会・ワークショップに興味を持っていただきありがとうございます。\n\n次回テーマと日程はこちらから確認できます。\n\nhttps://example.com/workshop"
+    },
+    {
+      "keyword": "7",
+      "matchType": "exact",
+      "responseType": "text",
+      "tagNames": ["資料請求済", "温度_低"],
+      "responseContent": "活用ガイドやテンプレートをご希望ですね。\n\n以下から受け取れます。\n・ChatGPT実務活用スタートガイド\n・AI業務分解チェックリスト\n・AIエージェント導入前チェックリスト\n\n特典一覧：\nhttps://example.com/ai-guide"
+    },
+    {
+      "keyword": "8",
+      "matchType": "exact",
+      "responseType": "text",
+      "tagNames": ["温度_中"],
+      "responseContent": "ご質問ありがとうございます。\n\n「こういうことできますか？」「自分の場合は何から始めればいいですか？」など、そのままメッセージで送ってください。内容に応じて、FAQ・ガイド・個別相談のいずれかをご案内します。"
+    },
+    {
+      "keyword": "ガイド",
+      "matchType": "contains",
+      "responseType": "text",
+      "tagNames": ["資料請求済"],
+      "responseContent": "AI活用ガイドをご希望ですね。\n\n以下から受け取りたいものを選んでください。\n\n1. ChatGPT実務活用スタートガイド\n2. AI業務分解チェックリスト\n3. AIエージェント導入前チェックリスト\n4. 30日AI活用ロードマップ\n\n特典一覧：\nhttps://example.com/ai-guide"
+    },
+    {
+      "keyword": "AI診断",
+      "matchType": "contains",
+      "responseType": "text",
+      "tagNames": ["温度_中"],
+      "responseContent": "AI診断を始めます。\n\n今いちばん近いものを選んで、数字で返信してください。\n\n1. AIを仕事で使えるようになりたい\n2. AIエージェント導入を相談したい\n3. 業務効率化・自動化を相談したい\n4. AIブートキャンプに興味がある\n5. 個別相談・個別講座を受けたい\n6. 勉強会・ワークショップに参加したい\n7. 活用ガイドやテンプレートがほしい\n8. まず質問したい"
+    },
+    {
+      "keyword": "講座",
+      "matchType": "contains",
+      "responseType": "text",
+      "tagNames": ["興味_AI講座", "興味_AIブートキャンプ", "温度_中"],
+      "responseContent": "AI講座に興味を持っていただきありがとうございます。\n\n現在ご案内できる講座は以下です。\n\n1. AIブートキャンプ\n2. 個別AI講座\n3. 実務AI活用講座\n4. 法人向けAI研修\n\n講座案内はこちら：\nhttps://example.com/ai-bootcamp\n\n詳しく知りたい場合は「相談」と送ってください。"
+    },
+    {
+      "keyword": "勉強会",
+      "matchType": "contains",
+      "responseType": "text",
+      "tagNames": ["興味_勉強会", "温度_中"],
+      "responseContent": "AI勉強会に興味を持っていただきありがとうございます。\n\n週1回、実務で使えるAI活用をテーマに開催予定です。\n\n次回テーマ・日程はこちら：\nhttps://example.com/workshop\n\n個別に相談したい場合は「相談」と送ってください。"
+    },
+    {
+      "keyword": "相談",
+      "matchType": "contains",
+      "responseType": "text",
+      "tagNames": ["商談候補", "温度_高"],
+      "responseContent": "ご相談ありがとうございます。\n\n以下から近い内容を選んでください。\n\n1. AIを仕事で使いたい\n2. 業務効率化を相談したい\n3. AIエージェントを導入したい\n4. AI研修を依頼したい\n5. AI講座を受けたい\n6. まだ整理できていないので壁打ちしたい\n\n個別相談予約：\nhttps://example.com/booking"
+    },
+    {
+      "keyword": "導入相談",
+      "matchType": "contains",
+      "responseType": "text",
+      "tagNames": ["興味_AIエージェント", "興味_業務自動化", "温度_高", "商談候補"],
+      "responseContent": "導入相談をご希望ですね。\n\nAIエージェント導入、業務効率化、社内AI活用のどこから始めるべきかを整理できます。\n\nまずは相談フォームまたは予約ページから状況を教えてください。\n\n相談フォーム：\nhttps://example.com/consult-form\n\n予約ページ：\nhttps://example.com/booking"
+    },
+    {
+      "keyword": "質問",
+      "matchType": "contains",
+      "responseType": "text",
+      "tagNames": ["温度_中"],
+      "responseContent": "質問ありがとうございます。\n\n「こういうことできますか？」「自分の場合は何から始めればいいですか？」など、今気になっていることをそのまま送ってください。内容に応じて、ガイド・FAQ・個別相談をご案内します。"
+    },
+    {
+      "keyword": "料金",
+      "matchType": "contains",
+      "responseType": "text",
+      "tagNames": ["商談候補", "温度_高"],
+      "responseContent": "料金について知りたい方は、ご希望のサービスを選んでください。\n\n1. AIブートキャンプ\n2. 個別AI講座\n3. AIエージェント導入支援\n4. 法人研修\n5. AI顧問\n6. まず相談したい\n\n料金・サービス一覧：\nhttps://example.com/pricing"
+    }
+  ],
+  "richMenu": {
+    "size": { "width": 2500, "height": 1686 },
+    "selected": true,
+    "name": "AI CRM MVP Rich Menu",
+    "chatBarText": "メニュー",
+    "areas": [
+      {
+        "bounds": { "x": 0, "y": 0, "width": 833, "height": 843 },
+        "action": { "type": "message", "text": "ガイド" },
+        "label": "無料ガイド"
+      },
+      {
+        "bounds": { "x": 833, "y": 0, "width": 834, "height": 843 },
+        "action": { "type": "message", "text": "AI診断" },
+        "label": "AI診断"
+      },
+      {
+        "bounds": { "x": 1667, "y": 0, "width": 833, "height": 843 },
+        "action": { "type": "message", "text": "導入相談" },
+        "label": "導入相談"
+      },
+      {
+        "bounds": { "x": 0, "y": 843, "width": 833, "height": 843 },
+        "action": { "type": "uri", "uri": "https://example.com/ai-bootcamp" },
+        "label": "AI講座"
+      },
+      {
+        "bounds": { "x": 833, "y": 843, "width": 834, "height": 843 },
+        "action": { "type": "uri", "uri": "https://example.com/workshop" },
+        "label": "勉強会"
+      },
+      {
+        "bounds": { "x": 1667, "y": 843, "width": 833, "height": 843 },
+        "action": { "type": "message", "text": "質問" },
+        "label": "質問する"
+      }
+    ]
+  },
+  "kpis": [
+    "友だち追加数",
+    "ブロック率",
+    "目的選択率",
+    "特典DL率",
+    "リッチメニュークリック率",
+    "勉強会申込率",
+    "個別相談予約率",
+    "商談化率",
+    "成約率"
+  ]
+}

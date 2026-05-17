@@ -1,0 +1,13 @@
+{
+  "guideIndex": "https://YOUR_WORKER_DOMAIN/ai-crm/guide",
+  "booking": "https://YOUR_WORKER_DOMAIN/ai-crm/booking",
+  "bootcamp": "https://YOUR_WORKER_DOMAIN/ai-crm/bootcamp",
+  "workshop": "https://YOUR_WORKER_DOMAIN/ai-crm/workshop",
+  "cases": "https://YOUR_WORKER_DOMAIN/ai-crm/cases",
+  "pricing": "https://YOUR_WORKER_DOMAIN/ai-crm/pricing",
+  "workBreakdown": "https://YOUR_WORKER_DOMAIN/ai-crm/work-breakdown",
+  "promptTemplates": "https://YOUR_WORKER_DOMAIN/ai-crm/prompts",
+  "agentChecklist": "https://YOUR_WORKER_DOMAIN/ai-crm/agent",
+  "automationUseCases": "https://YOUR_WORKER_DOMAIN/ai-crm/automation",
+  "consultForm": "https://YOUR_WORKER_DOMAIN/ai-crm/consult"
+}

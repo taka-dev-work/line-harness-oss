@@ -27,21 +27,22 @@ database_id = "YOUR_DEV_D1_DATABASE_ID"
 crons = ["*/5 * * * *"]
 
 # ═══════════════════════════════════════════════════════════════
-# 本番環境 (aiagent.mini@)
+# 本番環境
 # 使い方: npx wrangler deploy --env production --name your-worker-name
 # D1:     npx wrangler d1 execute line-crm --env production --remote --file ...
 # ═══════════════════════════════════════════════════════════════
 [env.production]
-account_id = "YOUR_ACCOUNT_ID"
+name = "ai-line-crm"
+account_id = "YOUR_PROD_ACCOUNT_ID"
 
 [env.production.assets]
-directory = "dist/client"
+directory = "../web/out"
 binding = "ASSETS"
 
 [[env.production.d1_databases]]
 binding = "DB"
 database_name = "line-crm"
-database_id = "YOUR_D1_DATABASE_ID"
+database_id = "YOUR_PROD_D1_DATABASE_ID"
 
 # R2 removed — image storage moved to Supabase Storage
 # [[env.production.r2_buckets]]

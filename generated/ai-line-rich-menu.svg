@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="2500" height="1686" viewBox="0 0 2500 1686">
+  <rect width="2500" height="1686" fill="#FFFFFF"/>
+  <rect x="0" y="0" width="2500" height="1686" fill="#F8FAFC"/>
+  
+  <g>
+    <rect x="0" y="0" width="833" height="843" fill="#F7FBFF"/>
+    <rect x="52" y="52" width="729" height="739" rx="44" fill="#FFFFFF" stroke="#E2E8F0" stroke-width="6"/>
+    <rect x="52" y="52" width="18" height="739" rx="9" fill="#2563EB"/>
+    <path d="M344.5 206h104c30 0 54 24 54 54v156H344.5c-26 0-46-20-46-46V252c0-26 20-46 46-46Z" fill="none" stroke="#2563EB" stroke-width="16"/><path d="M386.5 260h78M386.5 310h78M386.5 360h48" stroke="#2563EB" stroke-width="14" stroke-linecap="round"/>
+    <text x="416.5" y="542" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Noto Sans JP', sans-serif" font-size="76" font-weight="800" fill="#0F172A">無料ガイド</text>
+    <text x="416.5" y="646" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Noto Sans JP', sans-serif" font-size="38" font-weight="600" fill="#475569">特典を受け取る</text>
+  </g>
+  <g>
+    <rect x="833" y="0" width="834" height="843" fill="#F8FAFC"/>
+    <rect x="885" y="52" width="730" height="739" rx="44" fill="#FFFFFF" stroke="#E2E8F0" stroke-width="6"/>
+    <rect x="885" y="52" width="18" height="739" rx="9" fill="#0F766E"/>
+    <circle cx="1250" cy="284" r="94" fill="none" stroke="#0F766E" stroke-width="16"/><path d="M1202 286l34 36 68-78" fill="none" stroke="#0F766E" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"/>
+    <text x="1250" y="542" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Noto Sans JP', sans-serif" font-size="76" font-weight="800" fill="#0F172A">AI診断</text>
+    <text x="1250" y="646" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Noto Sans JP', sans-serif" font-size="38" font-weight="600" fill="#475569">目的を選ぶ</text>
+  </g>
+  <g>
+    <rect x="1667" y="0" width="833" height="843" fill="#FFF7ED"/>
+    <rect x="1719" y="52" width="729" height="739" rx="44" fill="#FFFFFF" stroke="#E2E8F0" stroke-width="6"/>
+    <rect x="1719" y="52" width="18" height="739" rx="9" fill="#EA580C"/>
+    <path d="M1983.5 212h200c28 0 50 22 50 50v78c0 28-22 50-50 50h-70l-62 54v-54h-68c-28 0-50-22-50-50v-78c0-28 22-50 50-50Z" fill="none" stroke="#EA580C" stroke-width="16" stroke-linejoin="round"/><path d="M2037.5 284h92M2037.5 330h64" stroke="#EA580C" stroke-width="14" stroke-linecap="round"/>
+    <text x="2083.5" y="542" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Noto Sans JP', sans-serif" font-size="76" font-weight="800" fill="#0F172A">導入相談</text>
+    <text x="2083.5" y="646" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Noto Sans JP', sans-serif" font-size="38" font-weight="600" fill="#475569">業務を整理する</text>
+  </g>
+  <g>
+    <rect x="0" y="843" width="833" height="843" fill="#FFFBEB"/>
+    <rect x="52" y="895" width="729" height="739" rx="44" fill="#FFFFFF" stroke="#E2E8F0" stroke-width="6"/>
+    <rect x="52" y="895" width="18" height="739" rx="9" fill="#D97706"/>
+    <path d="M300.5 1107l116-58 116 58-116 58-116-58Z" fill="none" stroke="#D97706" stroke-width="16" stroke-linejoin="round"/><path d="M346.5 1149v58c42 34 98 34 140 0v-58" fill="none" stroke="#D97706" stroke-width="16" stroke-linecap="round"/>
+    <text x="416.5" y="1385" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Noto Sans JP', sans-serif" font-size="76" font-weight="800" fill="#0F172A">AI講座</text>
+    <text x="416.5" y="1489" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Noto Sans JP', sans-serif" font-size="38" font-weight="600" fill="#475569">実務で使う</text>
+  </g>
+  <g>
+    <rect x="833" y="843" width="834" height="843" fill="#F0FDF4"/>
+    <rect x="885" y="895" width="730" height="739" rx="44" fill="#FFFFFF" stroke="#E2E8F0" stroke-width="6"/>
+    <rect x="885" y="895" width="18" height="739" rx="9" fill="#16A34A"/>
+    <rect x="1146" y="1039" width="208" height="190" rx="22" fill="none" stroke="#16A34A" stroke-width="16"/><path d="M1146 1097h208M1196 1011v52M1304 1011v52" stroke="#16A34A" stroke-width="16" stroke-linecap="round"/><circle cx="1208" cy="1155" r="12" fill="#16A34A"/><circle cx="1252" cy="1155" r="12" fill="#16A34A"/><circle cx="1296" cy="1155" r="12" fill="#16A34A"/>
+    <text x="1250" y="1385" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Noto Sans JP', sans-serif" font-size="76" font-weight="800" fill="#0F172A">勉強会</text>
+    <text x="1250" y="1489" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Noto Sans JP', sans-serif" font-size="38" font-weight="600" fill="#475569">イベントを見る</text>
+  </g>
+  <g>
+    <rect x="1667" y="843" width="833" height="843" fill="#FDF2F8"/>
+    <rect x="1719" y="895" width="729" height="739" rx="44" fill="#FFFFFF" stroke="#E2E8F0" stroke-width="6"/>
+    <rect x="1719" y="895" width="18" height="739" rx="9" fill="#DB2777"/>
+    <circle cx="2083.5" cy="1105" r="88" fill="none" stroke="#DB2777" stroke-width="16"/><path d="M2049.5 1083c4-36 80-38 80 10 0 42-46 42-46 82" fill="none" stroke="#DB2777" stroke-width="16" stroke-linecap="round"/><circle cx="2093.5" cy="1203" r="12" fill="#DB2777"/>
+    <text x="2083.5" y="1385" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Noto Sans JP', sans-serif" font-size="76" font-weight="800" fill="#0F172A">質問する</text>
+    <text x="2083.5" y="1489" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Noto Sans JP', sans-serif" font-size="38" font-weight="600" fill="#475569">まず聞いてみる</text>
+  </g>
+  <path d="M833 0v1686M1667 0v1686M0 843h2500" stroke="#CBD5E1" stroke-width="4"/>
+</svg>

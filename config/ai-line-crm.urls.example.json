@@ -1,0 +1,13 @@
+{
+  "guideIndex": "https://example.com/ai-guide",
+  "booking": "https://example.com/booking",
+  "bootcamp": "https://example.com/ai-bootcamp",
+  "workshop": "https://example.com/workshop",
+  "cases": "https://example.com/cases",
+  "pricing": "https://example.com/pricing",
+  "workBreakdown": "https://example.com/ai-work-breakdown",
+  "promptTemplates": "https://example.com/prompt-templates",
+  "agentChecklist": "https://example.com/agent-checklist",
+  "automationUseCases": "https://example.com/automation-use-cases",
+  "consultForm": "https://example.com/consult-form"
+}

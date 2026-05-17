@@ -8,9 +8,16 @@ dist/
 *.log
 .DS_Store
 .mcp.json
+.claude/
 *.toml.bak
 .env.production
 .env.staging
+.dev.vars*
+config/*.local.json
+config/*.production.json
+scripts/launchd/
+scripts/fix-*.sql
+scripts/seed-*.sql
 apps/web/out/
 apps/worker/dist/
 .worktrees/

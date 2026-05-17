@@ -8,6 +8,9 @@ import {
   getFriendTags,
   getScenarios,
   enrollFriendInScenario,
+  createChat,
+  getChatByFriendId,
+  updateChat,
   jstNow,
 } from '@line-crm/db';
 import type { Friend as DbFriend, Tag as DbTag } from '@line-crm/db';
@@ -356,6 +359,20 @@ friends.post('/api/friends/:id/messages', async (c) => {
       )
       .bind(logId, friend.id, messageType, body.content, jstNow())
       .run();
+
+    const existingChat = await getChatByFriendId(db, friend.id);
+    if (existingChat) {
+      await updateChat(db, existingChat.id, {
+        status: 'in_progress',
+        lastMessageAt: jstNow(),
+      });
+    } else {
+      const chat = await createChat(db, { friendId: friend.id });
+      await updateChat(db, chat.id, {
+        status: 'in_progress',
+        lastMessageAt: jstNow(),
+      });
+    }
 
     return c.json({ success: true, data: { messageId: logId } });
   } catch (err) {

@@ -46,6 +46,9 @@ import { autoReplies } from './routes/auto-replies.js';
 import { trafficPools } from './routes/traffic-pools.js';
 import { meetCallback } from './routes/meet-callback.js';
 import { messageTemplates } from './routes/message-templates.js';
+import { aiCrmPages } from './routes/ai-crm-pages.js';
+import { booking } from './routes/booking.js';
+import { diagnosis } from './routes/diagnosis.js';
 
 export type Env = {
   Bindings: {
@@ -65,6 +68,10 @@ export type Env = {
     X_HARNESS_URL?: string;  // Optional: X Harness API URL for account linking
     IG_HARNESS_URL?: string;  // Optional: IG Harness API URL for cross-platform linking
     IG_HARNESS_LINK_SECRET?: string;  // Shared secret for IG Harness link-line webhook
+    GEMINI_API_KEY?: string;
+    GOOGLE_SERVICE_ACCOUNT_EMAIL?: string;
+    GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY?: string;
+    GOOGLE_CALENDAR_ID?: string;
   };
   Variables: {
     staff: { id: string; name: string; role: 'owner' | 'admin' | 'staff' };
@@ -120,6 +127,9 @@ app.route('/', trafficPools);
 app.route('/', accountSettings);
 app.route('/', meetCallback);
 app.route('/', messageTemplates);
+app.route('/', aiCrmPages);
+app.route('/', booking);
+app.route('/', diagnosis);
 
 // Self-hosted QR code proxy — prevents leaking ref tokens to third-party services
 app.get('/api/qr', async (c) => {

@@ -15,6 +15,49 @@ Cloudflare 無料枠で動く。サーバー代 **0 円**。Claude Code から�
 
 ---
 
+## AI LINE CRM テンプレートとして使う
+
+このリポジトリは、通常のLINE Harnessとしてだけでなく、**AI活用ガイド配布・AI診断・予約管理・Google Calendar / Meet連携・MCP連携** を含むAI LINE CRMスターターとしても使えます。
+
+別プロジェクトで使う場合は、まずこちらを読んでください。
+
+👉 [AI LINE CRM Installation Guide](docs/ai-line-crm-installation-guide.md)
+
+最短の流れ:
+
+```bash
+git clone https://github.com/YOUR_ORG/YOUR_REPO.git
+cd YOUR_REPO
+pnpm install
+cp .env.example .env.local
+cp .mcp.example.json .mcp.json
+cp config/ai-line-crm.urls.production.example.json config/ai-line-crm.urls.production.json
+```
+
+本番構築の大きな順番:
+
+1. Cloudflare D1を作る
+2. `apps/worker/wrangler.toml` に本番D1の `database_id` を入れる
+3. LINE Developersの各キーをCloudflare Secretに入れる
+4. `pnpm db:migrate` でDBを作る
+5. `pnpm deploy:worker:production` で本番デプロイ
+6. LINE DevelopersのWebhook URLを設定する
+7. `pnpm crm:seed:ai-line` でAI LINE CRM初期データを投入する
+8. 必要に応じてGoogle Calendar / MeetとMCPを設定する
+
+Codex / Claude Codeに環境構築を任せる場合のプロンプト:
+
+```text
+このリポジトリはAI LINE CRMです。
+READMEとdocs/ai-line-crm-installation-guide.mdを読み、ローカル開発環境を構築してください。
+次に、Cloudflare Workers/D1、LINE Developers、Google Calendar、MCP連携に必要な未設定項目をチェックリスト化してください。
+秘密情報は表示せず、設定が必要な変数名だけを案内してください。
+```
+
+秘密情報は `.env.local`、`.mcp.json`、`apps/worker/.dev.vars`、`config/*.production.json` に置き、GitHubにはコミットしないでください。
+
+---
+
 ## なぜ LINE Harness？
 
 | | L社 | U社 | **LINE Harness** |

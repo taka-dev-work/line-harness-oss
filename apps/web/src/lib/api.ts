@@ -42,13 +42,7 @@ export type BroadcastInsight = {
   fetchedAt?: string | null
 }
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL
-if (!API_URL) {
-  throw new Error(
-    'NEXT_PUBLIC_API_URL is not set. Build cannot proceed without a valid API URL. ' +
-    'Set it in .env.production (local) or GitHub Secrets (CI).'
-  )
-}
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? ''
 
 /**
  * Read the API key from localStorage (set during login).
@@ -376,6 +370,64 @@ export const api = {
         `/api/automations/${id}/logs` + (limit ? `?limit=${limit}` : ''),
       ),
   },
+  autoReplies: {
+    list: (params?: { accountId?: string }) => {
+      const query = params?.accountId ? '?accountId=' + params.accountId : ''
+      return fetchApi<ApiResponse<Array<{
+        id: string
+        keyword: string
+        matchType: 'exact' | 'contains'
+        responseType: string
+        responseContent: string
+        lineAccountId: string | null
+        isActive: boolean
+        createdAt: string
+      }>>>('/api/auto-replies' + query)
+    },
+    create: (data: {
+      keyword: string
+      matchType?: 'exact' | 'contains'
+      responseType?: string
+      responseContent: string
+      lineAccountId?: string | null
+    }) =>
+      fetchApi<ApiResponse<unknown>>('/api/auto-replies', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+    update: (id: string, data: {
+      keyword?: string
+      matchType?: 'exact' | 'contains'
+      responseType?: string
+      responseContent?: string
+      lineAccountId?: string | null
+      isActive?: boolean
+    }) =>
+      fetchApi<ApiResponse<unknown>>(`/api/auto-replies/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(data),
+      }),
+  },
+  guideAssets: {
+    list: () =>
+      fetchApi<ApiResponse<Array<{
+        id: string
+        title: string
+        filename: string
+        url: string
+        key: string
+        mimeType: string
+        size: number
+        createdAt: string
+      }>>>('/api/ai-crm/guide-assets'),
+    upload: (data: { title?: string; filename: string; mimeType: string; data: string }) =>
+      fetchApi<ApiResponse<unknown>>('/api/ai-crm/guide-assets', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+    delete: (id: string) =>
+      fetchApi<ApiResponse<null>>(`/api/ai-crm/guide-assets/${id}`, { method: 'DELETE' }),
+  },
   chats: {
     list: (params?: { status?: string; operatorId?: string; accountId?: string }) => {
       const query: Record<string, string> = {}
@@ -553,5 +605,55 @@ export const api = {
       fetchApi<ApiResponse<null>>(`/api/staff/${id}`, { method: 'DELETE' }),
     regenerateKey: (id: string) =>
       fetchApi<ApiResponse<{ apiKey: string }>>(`/api/staff/${id}/regenerate-key`, { method: 'POST' }),
+  },
+  booking: {
+    services: () =>
+      fetchApi<ApiResponse<unknown[]>>('/api/booking/services'),
+    createService: (data: Record<string, unknown>) =>
+      fetchApi<ApiResponse<unknown>>('/api/booking/services', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+    updateService: (id: string, data: Record<string, unknown>) =>
+      fetchApi<ApiResponse<unknown>>(`/api/booking/services/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(data),
+      }),
+    slots: (serviceId?: string) =>
+      fetchApi<ApiResponse<unknown[]>>(`/api/booking/slots${serviceId ? `?serviceId=${serviceId}` : ''}`),
+    createSlot: (data: Record<string, unknown>) =>
+      fetchApi<ApiResponse<unknown>>('/api/booking/slots', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+    generateSlots: (data: Record<string, unknown>) =>
+      fetchApi<ApiResponse<unknown[]>>('/api/booking/slots/generate', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+    bookings: (serviceId?: string) =>
+      fetchApi<ApiResponse<unknown[]>>(`/api/booking/bookings${serviceId ? `?serviceId=${serviceId}` : ''}`),
+    approve: (id: string) =>
+      fetchApi<ApiResponse<unknown>>(`/api/booking/bookings/${id}/approve`, { method: 'POST' }),
+    reject: (id: string) =>
+      fetchApi<ApiResponse<unknown>>(`/api/booking/bookings/${id}/reject`, { method: 'POST' }),
+    cancel: (id: string) =>
+      fetchApi<ApiResponse<unknown>>(`/api/booking/bookings/${id}/cancel`, { method: 'POST' }),
+  },
+  diagnosis: {
+    getConfig: () =>
+      fetchApi<ApiResponse<unknown>>('/api/diagnosis/config'),
+    applyConfig: (data: Record<string, unknown>) =>
+      fetchApi<ApiResponse<unknown>>('/api/diagnosis/config', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+    applyDefault: () =>
+      fetchApi<ApiResponse<unknown>>('/api/diagnosis/config/default', { method: 'POST' }),
+    generate: (description: string) =>
+      fetchApi<{ success: boolean; data?: unknown; warning?: string; error?: string }>('/api/ai/diagnosis-setup', {
+        method: 'POST',
+        body: JSON.stringify({ description }),
+      }),
   },
 }
