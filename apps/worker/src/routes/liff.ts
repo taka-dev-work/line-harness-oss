@@ -5,7 +5,11 @@ import {
   getUserByEmail,
   linkFriendToUser,
   upsertFriend,
+  createEntryRoute,
+  deleteEntryRoute,
+  getEntryRoutes,
   getEntryRouteByRefCode,
+  updateEntryRoute,
   recordRefTracking,
   addTagToFriend,
   getLineAccountByChannelId,
@@ -1213,6 +1217,106 @@ liffRoutes.post('/api/liff/link', async (c) => {
 });
 
 // ─── Attribution Analytics ──────────────────────────────────────
+
+liffRoutes.get('/api/entry-routes', async (c) => {
+  try {
+    const routes = await getEntryRoutes(c.env.DB);
+    return c.json({
+      success: true,
+      data: routes.map((route) => ({
+        id: route.id,
+        refCode: route.ref_code,
+        name: route.name,
+        tagId: route.tag_id,
+        scenarioId: route.scenario_id,
+        redirectUrl: route.redirect_url,
+        isActive: Boolean(route.is_active),
+        createdAt: route.created_at,
+        updatedAt: route.updated_at,
+      })),
+    });
+  } catch (err) {
+    console.error('GET /api/entry-routes error:', err);
+    return c.json({ success: false, error: 'Internal server error' }, 500);
+  }
+});
+
+liffRoutes.post('/api/entry-routes', async (c) => {
+  try {
+    const body = await c.req.json<{
+      refCode?: string;
+      name?: string;
+      tagId?: string | null;
+      scenarioId?: string | null;
+      redirectUrl?: string | null;
+      isActive?: boolean;
+    }>();
+    if (!body.name || !body.refCode) {
+      return c.json({ success: false, error: 'name and refCode are required' }, 400);
+    }
+    const route = await createEntryRoute(c.env.DB, {
+      name: body.name,
+      refCode: body.refCode,
+      tagId: body.tagId ?? null,
+      scenarioId: body.scenarioId ?? null,
+      redirectUrl: body.redirectUrl ?? null,
+      isActive: body.isActive,
+    });
+    return c.json({
+      success: true,
+      data: {
+        id: route.id,
+        refCode: route.ref_code,
+        name: route.name,
+        tagId: route.tag_id,
+        scenarioId: route.scenario_id,
+        redirectUrl: route.redirect_url,
+        isActive: Boolean(route.is_active),
+        createdAt: route.created_at,
+        updatedAt: route.updated_at,
+      },
+    }, 201);
+  } catch (err) {
+    console.error('POST /api/entry-routes error:', err);
+    return c.json({ success: false, error: err instanceof Error ? err.message : 'Internal server error' }, 400);
+  }
+});
+
+liffRoutes.put('/api/entry-routes/:id', async (c) => {
+  try {
+    const id = c.req.param('id');
+    const body = await c.req.json();
+    const route = await updateEntryRoute(c.env.DB, id, body);
+    if (!route) return c.json({ success: false, error: 'Entry route not found' }, 404);
+    return c.json({
+      success: true,
+      data: {
+        id: route.id,
+        refCode: route.ref_code,
+        name: route.name,
+        tagId: route.tag_id,
+        scenarioId: route.scenario_id,
+        redirectUrl: route.redirect_url,
+        isActive: Boolean(route.is_active),
+        createdAt: route.created_at,
+        updatedAt: route.updated_at,
+      },
+    });
+  } catch (err) {
+    console.error('PUT /api/entry-routes/:id error:', err);
+    return c.json({ success: false, error: err instanceof Error ? err.message : 'Internal server error' }, 400);
+  }
+});
+
+liffRoutes.delete('/api/entry-routes/:id', async (c) => {
+  try {
+    await deleteEntryRoute(c.env.DB, c.req.param('id'));
+    return c.json({ success: true, data: null });
+  } catch (err) {
+    console.error('DELETE /api/entry-routes/:id error:', err);
+    return c.json({ success: false, error: 'Internal server error' }, 500);
+  }
+});
 
 /**
  * GET /api/analytics/ref-summary — ref code analytics summary

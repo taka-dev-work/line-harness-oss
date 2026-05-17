@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "ai-line-crm": {
+      "command": "npx",
+      "args": ["-y", "@line-harness/mcp-server@latest"],
+      "env": {
+        "LINE_HARNESS_API_URL": "https://ai-line-crm.takanorixai.workers.dev",
+        "LINE_HARNESS_API_KEY": "YOUR_PRODUCTION_API_KEY"
+      }
+    }
+  }
+}

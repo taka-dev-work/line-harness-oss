@@ -17,6 +17,7 @@ import { jitterDeliveryTime, addJitter, sleep } from './stealth.js';
  *
  * Supported variables:
  * - {{name}}                → friend's display name
+ * - {{line_user_id}}        → friend's LINE user ID
  * - {{uid}}                 → friend's user UUID
  * - {{friend_id}}           → friend's internal ID
  * - {{auth_url:CHANNEL_ID}} → full /auth/line URL with uid for cross-account linking
@@ -24,11 +25,12 @@ import { jitterDeliveryTime, addJitter, sleep } from './stealth.js';
  */
 export function expandVariables(
   content: string,
-  friend: { id: string; display_name: string | null; user_id: string | null; ref_code?: string | null; metadata?: Record<string, unknown> | string | null },
+  friend: { id: string; display_name: string | null; line_user_id?: string | null; user_id: string | null; ref_code?: string | null; metadata?: Record<string, unknown> | string | null },
   apiOrigin?: string,
 ): string {
   let result = content;
   result = result.replace(/\{\{name\}\}/g, friend.display_name || '');
+  result = result.replace(/\{\{line_user_id\}\}/g, friend.line_user_id || '');
   result = result.replace(/\{\{uid\}\}/g, friend.user_id || '');
   result = result.replace(/\{\{friend_id\}\}/g, friend.id);
   result = result.replace(/\{\{ref\}\}/g, friend.ref_code || '');

@@ -6,9 +6,9 @@
   "scripts": {
     "dev": "vite dev",
     "test": "vitest run",
-    "build": "vite build",
+    "build": "vite build && node ../../scripts/remove-worker-build-secrets.mjs",
     "preview": "vite preview",
-    "deploy": "vite build && wrangler deploy",
+    "deploy": "pnpm run build && wrangler deploy",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

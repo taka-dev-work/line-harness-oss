@@ -6,6 +6,11 @@ export async function authMiddleware(c: Context<Env>, next: Next): Promise<Respo
   // Skip auth for the LINE webhook endpoint — it uses signature verification instead
   // Skip auth for OpenAPI docs — public documentation
   const path = new URL(c.req.url).pathname;
+
+  if (!path.startsWith('/api/') && path !== '/webhook' && path !== '/openapi.json') {
+    return next();
+  }
+
   if (
     path === '/webhook' ||
     path === '/docs' ||
@@ -15,6 +20,7 @@ export async function authMiddleware(c: Context<Env>, next: Next): Promise<Respo
     path.startsWith('/r/') ||
     path.startsWith('/pool/') ||
     path.startsWith('/images/') ||
+    path.startsWith('/ai-crm/') ||
     path.startsWith('/api/liff/') ||
     path.startsWith('/auth/') ||
     path === '/setup' ||
@@ -24,6 +30,9 @@ export async function authMiddleware(c: Context<Env>, next: Next): Promise<Respo
     path.match(/^\/api\/forms\/[^/]+\/opened$/) ||
     path.match(/^\/api\/forms\/[^/]+\/partial$/) ||
     path.match(/^\/api\/forms\/[^/]+$/) || // GET form definition (public for LIFF)
+    path === '/api/booking/submit' ||
+    path.match(/^\/api\/booking\/cancel\/[^/]+$/) ||
+    path === '/api/diagnosis/submit' ||
     path === '/api/meet-callback' || // Meet Harness completion callback
     path === '/api/qr' // Public QR proxy — used by desktop landing pages
   ) {

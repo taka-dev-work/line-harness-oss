@@ -1,0 +1,95 @@
+# AI LINE CRM 本番化チェックリスト
+
+このチェックリストは、ローカル検証済みのAI LINE CRMを本番運用へ移すための最短手順です。
+
+## 1. 固定URLを決める
+
+Cloudflare Tunnel の一時URLではなく、Cloudflare Workers の固定URLまたは独自ドメインを使います。
+
+```text
+https://YOUR_WORKER_DOMAIN
+```
+
+LINE Developers の Webhook URL は一度決めたら変更しません。
+
+```text
+https://YOUR_WORKER_DOMAIN/webhook
+```
+
+## 2. 本番URL設定を作る
+
+```bash
+cp config/ai-line-crm.urls.production.example.json config/ai-line-crm.urls.production.json
+```
+
+`YOUR_WORKER_DOMAIN` を固定URLへ置換します。
+
+```bash
+pnpm crm:validate:ai-line -- --url-config=config/ai-line-crm.urls.production.json --strict-urls
+pnpm crm:check:ai-line -- --url-config=config/ai-line-crm.urls.production.json --production
+```
+
+## 3. Cloudflare secrets を設定する
+
+Worker本番環境に以下を設定します。
+
+```bash
+wrangler secret put API_KEY --config apps/worker/wrangler.toml --env production
+wrangler secret put LINE_CHANNEL_ACCESS_TOKEN --config apps/worker/wrangler.toml --env production
+wrangler secret put LINE_CHANNEL_SECRET --config apps/worker/wrangler.toml --env production
+wrangler secret put LINE_LOGIN_CHANNEL_ID --config apps/worker/wrangler.toml --env production
+wrangler secret put LINE_LOGIN_CHANNEL_SECRET --config apps/worker/wrangler.toml --env production
+wrangler secret put WORKER_URL --config apps/worker/wrangler.toml --env production
+wrangler secret put LIFF_URL --config apps/worker/wrangler.toml --env production
+```
+
+`WORKER_URL` は固定Worker URL、`LIFF_URL` はLIFFのエンドポイントまたはWorker固定URLを設定します。
+
+## 4. D1を本番へ反映する
+
+`apps/worker/wrangler.toml` の `env.production.d1_databases` に本番D1の `database_id` を入れてから実行します。
+
+```bash
+pnpm db:migrate
+```
+
+## 5. Workerをデプロイする
+
+```bash
+pnpm deploy:worker:production
+```
+
+## 6. CRM初期データを投入する
+
+```bash
+LINE_HARNESS_API_URL=https://YOUR_WORKER_DOMAIN \
+LINE_HARNESS_API_KEY=YOUR_API_KEY \
+pnpm crm:seed:ai-line -- --url-config=config/ai-line-crm.urls.production.json --strict-urls
+```
+
+## 7. リッチメニューを本番作成する
+
+```bash
+pnpm crm:rich-menu:ai-line -- --url-config=config/ai-line-crm.urls.production.json --out=generated/ai-line-rich-menu.production.json
+```
+
+作成、画像アップロード、デフォルト設定を本番APIへ実行します。
+
+## 8. 実機確認
+
+- LINE Developers の Webhook 検証が OK
+- 友だち追加で初回メッセージが届く
+- リッチメニュー6項目が反応する
+- 相談フォームがWindows/スマホで開く
+- フォーム送信が管理画面に出る
+- 友だち管理に追加ユーザーが出る
+- `example.com` や `trycloudflare.com` が本番返信に残っていない
+
+## 9. 本番化後に見るKPI
+
+- 友だち追加数
+- 目的選択率
+- フォーム送信数
+- 商談候補タグ数
+- ブロック率
+- 個別相談予約率

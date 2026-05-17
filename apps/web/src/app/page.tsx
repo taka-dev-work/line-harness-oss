@@ -25,6 +25,11 @@ const ccPrompts = [
   },
 ]
 
+function getWorkerBaseUrl() {
+  if (typeof window !== 'undefined') return window.location.origin
+  return process.env.NEXT_PUBLIC_API_URL || ''
+}
+
 interface DashboardStats {
   friendCount: number | null
   activeScenarioCount: number | null
@@ -73,6 +78,7 @@ function StatCard({ title, value, loading, icon, href, accentColor = '#06C755' }
 
 export default function DashboardPage() {
   const { selectedAccountId, selectedAccount } = useAccount()
+  const [workerBaseUrl, setWorkerBaseUrl] = useState('')
   const [stats, setStats] = useState<DashboardStats>({
     friendCount: null,
     activeScenarioCount: null,
@@ -83,6 +89,10 @@ export default function DashboardPage() {
   })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+
+  useEffect(() => {
+    setWorkerBaseUrl(getWorkerBaseUrl())
+  }, [])
 
   useEffect(() => {
     const load = async () => {
@@ -153,7 +163,7 @@ export default function DashboardPage() {
 
       {/* Demo banner */}
       <a
-        href="https://your-worker.your-subdomain.workers.dev/auth/line?ref=dashboard"
+        href={`${workerBaseUrl}/auth/line?ref=dashboard`}
         target="_blank"
         rel="noopener noreferrer"
         className="block mb-6 p-4 rounded-xl border border-green-200 bg-gradient-to-r from-green-50 to-emerald-50 hover:from-green-100 hover:to-emerald-100 transition-colors"

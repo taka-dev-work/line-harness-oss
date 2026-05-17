@@ -6,9 +6,9 @@ import Header from '@/components/layout/header'
 import { fetchApi } from '@/lib/api'
 import { useAccount } from '@/contexts/account-context'
 
-const WORKER_BASE = process.env.NEXT_PUBLIC_API_URL
-if (!WORKER_BASE) {
-  throw new Error('NEXT_PUBLIC_API_URL is not set. Build cannot proceed.')
+function getWorkerBase() {
+  if (typeof window !== 'undefined') return window.location.origin
+  return process.env.NEXT_PUBLIC_API_URL || ''
 }
 
 interface RefRoute {
@@ -39,13 +39,21 @@ interface RefDetailData {
 }
 
 export default function AttributionPage() {
-  const { selectedAccountId } = useAccount()
+  const { selectedAccountId, selectedAccount } = useAccount()
+  const [workerBase, setWorkerBase] = useState(process.env.NEXT_PUBLIC_API_URL || '')
   const [summary, setSummary] = useState<RefSummaryData | null>(null)
   const [loading, setLoading] = useState(true)
   const [selectedRef, setSelectedRef] = useState<string | null>(null)
   const [detail, setDetail] = useState<RefDetailData | null>(null)
   const [detailLoading, setDetailLoading] = useState(false)
   const [copiedCode, setCopiedCode] = useState<string | null>(null)
+  const [routeForm, setRouteForm] = useState({ name: '', refCode: '' })
+  const [savingRoute, setSavingRoute] = useState(false)
+  const [notice, setNotice] = useState('')
+
+  useEffect(() => {
+    setWorkerBase(getWorkerBase())
+  }, [])
 
   const loadSummary = useCallback(async () => {
     setLoading(true)
@@ -86,10 +94,60 @@ export default function AttributionPage() {
   }
 
   const handleCopy = async (refCode: string) => {
-    const url = `${WORKER_BASE}/auth/line?ref=${encodeURIComponent(refCode)}`
+    const url = buildEntryUrl(refCode)
     await navigator.clipboard.writeText(url)
     setCopiedCode(refCode)
     setTimeout(() => setCopiedCode(null), 2000)
+  }
+
+  const copyText = async (value: string, label: string) => {
+    await navigator.clipboard.writeText(value)
+    setNotice(`${label}をコピーしました。`)
+  }
+
+  const buildEntryUrl = (refCode: string) => {
+    const params = new URLSearchParams()
+    params.set('ref', refCode)
+    if (selectedAccount?.channelId) params.set('account', selectedAccount.channelId)
+    return `${workerBase}/auth/line?${params.toString()}`
+  }
+
+  const officialLineUrl = selectedAccount?.basicId
+    ? `https://line.me/R/ti/p/${selectedAccount.basicId}`
+    : ''
+
+  const suggestRefCode = (name: string) => {
+    const base = name
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+    return base || `route-${Date.now().toString(36)}`
+  }
+
+  const createRoute = async () => {
+    const name = routeForm.name.trim()
+    const refCode = (routeForm.refCode.trim() || suggestRefCode(name)).replace(/[^a-zA-Z0-9_-]/g, '-')
+    if (!name || !refCode) {
+      setNotice('経路名とrefコードを入力してください。')
+      return
+    }
+    setSavingRoute(true)
+    setNotice('')
+    try {
+      const res = await fetchApi<{ success: boolean; error?: string }>('/api/entry-routes', {
+        method: 'POST',
+        body: JSON.stringify({ name, refCode, isActive: true }),
+      })
+      if (!res.success) throw new Error(res.error || '流入経路の作成に失敗しました')
+      setRouteForm({ name: '', refCode: '' })
+      setNotice('流入経路を作成しました。URLをコピーしてSNS、note、LPなどに設置できます。')
+      await loadSummary()
+    } catch (err) {
+      setNotice(err instanceof Error ? err.message : '流入経路の作成に失敗しました')
+    } finally {
+      setSavingRoute(false)
+    }
   }
 
   const formatDate = (iso: string | null) => {
@@ -101,8 +159,88 @@ export default function AttributionPage() {
     <div>
       <Header
         title="流入経路分析"
-        description="ref コード別の友だち獲得・クリック実績"
+        description="SNS、note、LP、セミナーなどの入口別に友だち追加を計測します"
       />
+
+      {notice && <div className="mb-4 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-700">{notice}</div>}
+
+      <section className="mb-6 rounded-lg border border-emerald-200 bg-emerald-50 p-5">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <h2 className="text-base font-bold text-emerald-950">連携中の公式アカウント</h2>
+            <p className="mt-1 text-sm text-emerald-800">
+              {selectedAccount ? `${selectedAccount.displayName || selectedAccount.name} に紐づく流入URLを作成します。` : '公式アカウントを選択してください。'}
+            </p>
+            {selectedAccount?.basicId && <p className="mt-1 font-mono text-xs text-emerald-700">{selectedAccount.basicId}</p>}
+          </div>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            {officialLineUrl ? (
+              <button
+                type="button"
+                onClick={() => copyText(officialLineUrl, '公式LINE URL')}
+                className="rounded-lg bg-white px-3 py-2 text-sm font-bold text-emerald-800 ring-1 ring-emerald-200 hover:bg-emerald-100"
+              >
+                公式LINE URLをコピー
+              </button>
+            ) : (
+              <span className="rounded-lg bg-white px-3 py-2 text-sm font-bold text-amber-700 ring-1 ring-amber-200">
+                Basic ID取得中
+              </span>
+            )}
+          </div>
+        </div>
+      </section>
+
+      <section className="mb-6 rounded-lg border border-gray-200 bg-white p-5">
+        <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <h2 className="text-base font-bold text-gray-900">流入経路を作成</h2>
+            <p className="mt-1 text-sm text-gray-500">
+              入口ごとに専用URLを作ります。例: Xプロフィール、note記事、セミナー、LP。
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setRouteForm({ ...routeForm, refCode: suggestRefCode(routeForm.name) })}
+            className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-bold text-gray-700 hover:bg-gray-50"
+          >
+            ref自動作成
+          </button>
+        </div>
+        <div className="mt-4 grid gap-3 md:grid-cols-[1fr_220px_auto]">
+          <label className="text-sm font-medium text-gray-700">
+            経路名
+            <input
+              className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+              value={routeForm.name}
+              onChange={(e) => setRouteForm({ ...routeForm, name: e.target.value })}
+              placeholder="例: Xプロフィール"
+            />
+          </label>
+          <label className="text-sm font-medium text-gray-700">
+            refコード
+            <input
+              className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 font-mono text-sm"
+              value={routeForm.refCode}
+              onChange={(e) => setRouteForm({ ...routeForm, refCode: e.target.value })}
+              placeholder="例: x-profile"
+            />
+          </label>
+          <div className="flex items-end">
+            <button
+              type="button"
+              onClick={createRoute}
+              disabled={savingRoute}
+              className="w-full rounded-lg bg-green-600 px-4 py-2 text-sm font-bold text-white hover:bg-green-700 disabled:bg-gray-300"
+            >
+              {savingRoute ? '作成中...' : '作成'}
+            </button>
+          </div>
+        </div>
+        <p className="mt-3 break-all rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-500">
+          作成されるURL: {buildEntryUrl(routeForm.refCode || suggestRefCode(routeForm.name))}
+        </p>
+      </section>
 
       {/* Summary cards */}
       {summary && (
@@ -150,7 +288,7 @@ export default function AttributionPage() {
             </thead>
             <tbody className="divide-y divide-gray-200">
               {summary.routes.map((route) => {
-                const authUrl = `${WORKER_BASE}/auth/line?ref=${encodeURIComponent(route.refCode)}`
+                const authUrl = buildEntryUrl(route.refCode)
                 const isExpanded = selectedRef === route.refCode
                 return (
                   <>

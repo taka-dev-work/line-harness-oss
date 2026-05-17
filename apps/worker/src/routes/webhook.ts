@@ -66,7 +66,7 @@ webhook.post('/webhook', async (c) => {
   const processingPromise = (async () => {
     for (const event of body.events) {
       try {
-        await handleEvent(db, lineClient, event, channelAccessToken, matchedAccountId, c.env.WORKER_URL || new URL(c.req.url).origin);
+        await handleEvent(db, lineClient, event, channelAccessToken, matchedAccountId, c.env.WORKER_URL || new URL(c.req.url).origin, c.env.LIFF_URL);
       } catch (err) {
         console.error('Error handling webhook event:', err);
       }
@@ -85,6 +85,7 @@ async function handleEvent(
   lineAccessToken: string,
   lineAccountId: string | null = null,
   workerUrl?: string,
+  liffUrl?: string,
 ): Promise<void> {
   if (event.type === 'follow') {
     const userId =
@@ -200,7 +201,25 @@ async function handleEvent(
     const userId = event.source.type === 'user' ? event.source.userId : undefined;
     if (!userId) return;
 
-    const friend = await getFriendByLineUserId(db, userId);
+    let friend = await getFriendByLineUserId(db, userId);
+    if (!friend) {
+      let profile;
+      try {
+        profile = await lineClient.getProfile(userId);
+      } catch (err) {
+        console.error('Failed to get profile for message sender', userId, err);
+      }
+      friend = await upsertFriend(db, {
+        lineUserId: userId,
+        displayName: profile?.displayName ?? null,
+        pictureUrl: profile?.pictureUrl ?? null,
+        statusMessage: profile?.statusMessage ?? null,
+      });
+      if (lineAccountId) {
+        await db.prepare('UPDATE friends SET line_account_id = ?, updated_at = ? WHERE id = ?')
+          .bind(lineAccountId, jstNow(), friend.id).run();
+      }
+    }
     if (!friend) return;
 
     const postbackData = (event as unknown as { postback: { data: string } }).postback.data;
@@ -210,7 +229,7 @@ async function handleEvent(
       ? `SELECT * FROM auto_replies WHERE is_active = 1 AND (line_account_id IS NULL OR line_account_id = ?) ORDER BY created_at ASC`
       : `SELECT * FROM auto_replies WHERE is_active = 1 AND line_account_id IS NULL ORDER BY created_at ASC`;
     const autoReplyStmt = db.prepare(autoReplyQuery);
-    const autoReplies = await (lineAccountId ? autoReplyStmt.bind(lineAccountId) : autoReplyStmt)
+    const autoRepliesResult = await (lineAccountId ? autoReplyStmt.bind(lineAccountId) : autoReplyStmt)
       .all<{
         id: string;
         keyword: string;
@@ -219,7 +238,12 @@ async function handleEvent(
         response_content: string;
       }>();
 
-    for (const rule of autoReplies.results) {
+    const autoReplies = autoRepliesResult.results.sort((a, b) => {
+      if (a.match_type !== b.match_type) return a.match_type === 'exact' ? -1 : 1;
+      return b.keyword.length - a.keyword.length;
+    });
+
+    for (const rule of autoReplies) {
       const isMatch = rule.match_type === 'exact'
         ? postbackData === rule.keyword
         : postbackData.includes(rule.keyword);
@@ -246,7 +270,25 @@ async function handleEvent(
   if (event.type === 'message' && event.message.type !== 'text') {
     const userId = event.source.type === 'user' ? event.source.userId : undefined;
     if (!userId) return;
-    const friend = await getFriendByLineUserId(db, userId);
+    let friend = await getFriendByLineUserId(db, userId);
+    if (!friend) {
+      let profile;
+      try {
+        profile = await lineClient.getProfile(userId);
+      } catch (err) {
+        console.error('Failed to get profile for text message sender', userId, err);
+      }
+      friend = await upsertFriend(db, {
+        lineUserId: userId,
+        displayName: profile?.displayName ?? null,
+        pictureUrl: profile?.pictureUrl ?? null,
+        statusMessage: profile?.statusMessage ?? null,
+      });
+      if (lineAccountId) {
+        await db.prepare('UPDATE friends SET line_account_id = ?, updated_at = ? WHERE id = ?')
+          .bind(lineAccountId, jstNow(), friend.id).run();
+      }
+    }
     if (!friend) return;
 
     const msg = event.message as { type: string; fileName?: string; title?: string };
@@ -267,6 +309,7 @@ async function handleEvent(
       )
       .bind(crypto.randomUUID(), friend.id, msg.type, content, jstNow())
       .run();
+    await upsertChatOnMessage(db, friend.id);
     return;
   }
 
@@ -276,7 +319,25 @@ async function handleEvent(
       event.source.type === 'user' ? event.source.userId : undefined;
     if (!userId) return;
 
-    const friend = await getFriendByLineUserId(db, userId);
+    let friend = await getFriendByLineUserId(db, userId);
+    if (!friend) {
+      let profile;
+      try {
+        profile = await lineClient.getProfile(userId);
+      } catch (err) {
+        console.error('Failed to get profile for text message sender', userId, err);
+      }
+      friend = await upsertFriend(db, {
+        lineUserId: userId,
+        displayName: profile?.displayName ?? null,
+        pictureUrl: profile?.pictureUrl ?? null,
+        statusMessage: profile?.statusMessage ?? null,
+      });
+      if (lineAccountId) {
+        await db.prepare('UPDATE friends SET line_account_id = ?, updated_at = ? WHERE id = ?')
+          .bind(lineAccountId, jstNow(), friend.id).run();
+      }
+    }
     if (!friend) return;
 
     const incomingText = textMessage.text;
@@ -291,6 +352,10 @@ async function handleEvent(
       )
       .bind(logId, friend.id, incomingText, now)
       .run();
+
+    // 受信したユーザー発言は、自動返信にマッチするかどうかに関係なく個別チャットへ同期する。
+    // これにより「AI診断」「予約」「質問」などの自動返信付き発言も管理画面で追える。
+    await upsertChatOnMessage(db, friend.id);
 
     // チャット unread 判定は auto_replies マッチ結果 (matched) を使う。
     // ハードコードキーワードリストは廃止 — auto_replies テーブルが single source of truth。
@@ -361,7 +426,7 @@ async function handleEvent(
               footer: { type: 'box', layout: 'vertical', paddingAll: '16px',
                 contents: [
                   { type: 'button', action: { type: 'message', label: '導入について相談する', text: '導入支援を希望します' }, style: 'primary', color: '#06C755' },
-                  ...(c.env.LIFF_URL ? [{ type: 'button', action: { type: 'uri', label: 'フィードバックを送る', uri: `${c.env.LIFF_URL}?page=form` }, style: 'secondary', margin: 'sm' }] : []),
+                  ...(liffUrl ? [{ type: 'button', action: { type: 'uri', label: 'フィードバックを送る', uri: `${liffUrl}?page=form` }, style: 'secondary', margin: 'sm' }] : []),
                 ],
               },
             }))]);
@@ -391,7 +456,7 @@ async function handleEvent(
       ? `SELECT * FROM auto_replies WHERE is_active = 1 AND (line_account_id IS NULL OR line_account_id = ?) ORDER BY created_at ASC`
       : `SELECT * FROM auto_replies WHERE is_active = 1 AND line_account_id IS NULL ORDER BY created_at ASC`;
     const autoReplyStmt = db.prepare(autoReplyQuery);
-    const autoReplies = await (lineAccountId ? autoReplyStmt.bind(lineAccountId) : autoReplyStmt)
+    const autoRepliesResult = await (lineAccountId ? autoReplyStmt.bind(lineAccountId) : autoReplyStmt)
       .all<{
         id: string;
         keyword: string;
@@ -402,9 +467,14 @@ async function handleEvent(
         created_at: string;
       }>();
 
+    const autoReplies = autoRepliesResult.results.sort((a, b) => {
+      if (a.match_type !== b.match_type) return a.match_type === 'exact' ? -1 : 1;
+      return b.keyword.length - a.keyword.length;
+    });
+
     let matched = false;
     let replyTokenConsumed = false;
-    for (const rule of autoReplies.results) {
+    for (const rule of autoReplies) {
       const isMatch =
         rule.match_type === 'exact'
           ? incomingText === rule.keyword
@@ -445,11 +515,6 @@ async function handleEvent(
         matched = true;
         break;
       }
-    }
-
-    // auto_replies にマッチしなかった & 配信時間コマンドでもない = 自発メッセージ → unread にする
-    if (!matched && !isTimeCommand) {
-      await upsertChatOnMessage(db, friend.id);
     }
 
     // イベントバス発火: message_received

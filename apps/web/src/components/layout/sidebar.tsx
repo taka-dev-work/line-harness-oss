@@ -40,8 +40,17 @@ const menuSections = [
     label: '自動化',
     items: [
       { href: '/automations', label: 'オートメーション', icon: 'M13 10V3L4 14h7v7l9-11h-7z' },
+      { href: '/mcp', label: 'MCP連携', icon: 'M8.5 8.5l7 7m0-7l-7 7M7 3h10a4 4 0 014 4v10a4 4 0 01-4 4H7a4 4 0 01-4-4V7a4 4 0 014-4z' },
+      { href: '/rich-menu-responses', label: 'リッチメニュー応答', icon: 'M4 6h16M4 12h16M4 18h7' },
       { href: '/webhooks', label: 'Webhook', icon: 'M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z' },
       { href: '/notifications', label: '通知', icon: 'M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9' },
+    ],
+  },
+  {
+    label: '予約・診断',
+    items: [
+      { href: '/booking', label: '予約管理', icon: 'M8 7V3m8 4V3M5 11h14M5 5h14a2 2 0 012 2v12a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2z' },
+      { href: '/diagnosis', label: 'AI診断', icon: 'M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z' },
     ],
   },
   {
@@ -187,10 +196,10 @@ export default function Sidebar() {
       <div className="px-6 py-5 border-b border-gray-200">
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 rounded-lg flex items-center justify-center text-white font-bold text-sm" style={{ backgroundColor: '#06C755' }}>
-            H
+            AI
           </div>
           <div>
-            <p className="text-sm font-bold text-gray-900 leading-tight">LINE Harness</p>
+            <p className="text-sm font-bold text-gray-900 leading-tight">AI LINE CRM</p>
             <p className="text-xs text-gray-400">管理画面</p>
           </div>
         </div>
@@ -252,7 +261,7 @@ export default function Sidebar() {
           </div>
         )}
         <div className="px-6 py-4 space-y-3">
-        <p className="text-xs text-gray-400">LINE Harness v{process.env.APP_VERSION || '0.0.0'}</p>
+        <p className="text-xs text-gray-400">AI LINE CRM v{process.env.APP_VERSION || '0.0.0'}</p>
         <button
           onClick={() => {
             localStorage.removeItem('lh_api_key')
@@ -289,8 +298,8 @@ export default function Sidebar() {
           </svg>
         </button>
         <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-lg flex items-center justify-center text-white font-bold text-xs" style={{ backgroundColor: '#06C755' }}>H</div>
-          <p className="text-sm font-bold text-gray-900">LINE Harness</p>
+          <div className="w-7 h-7 rounded-lg flex items-center justify-center text-white font-bold text-xs" style={{ backgroundColor: '#06C755' }}>AI</div>
+          <p className="text-sm font-bold text-gray-900">AI LINE CRM</p>
         </div>
       </div>
 
