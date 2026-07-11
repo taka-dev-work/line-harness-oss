@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080">
+  <style>
+    text { font-family: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans CJK JP", "Yu Gothic", sans-serif; letter-spacing: 0; }
+  </style>
+  
+    <rect width="1920" height="1080" fill="#f8fbff"/>
+    <circle cx="1730" cy="96" r="18" fill="#1a73e8"/>
+    <circle cx="1780" cy="96" r="18" fill="#ea4335"/>
+    <circle cx="1830" cy="96" r="18" fill="#fbbc04"/>
+    <circle cx="1880" cy="96" r="18" fill="#34a853"/>
+    <g><rect x="104" y="78" width="575" height="54" rx="27" fill="#e8f0fe" stroke="#1a73e8" stroke-width="2"/><text x="132" y="114" font-size="24" font-weight="700" fill="#1a73e8">Google I/O 2026を前提にしたEC戦略</text></g>
+    <text x="104" y="225" font-size="62" font-weight="800" fill="#202124" text-anchor="start"><tspan x="104" dy="0">AI時代のECは、入口が変わる</tspan></text>
+    <text x="104" y="1010" font-size="24" fill="#5f6368">01 / 16  |  AI x EC Strategy</text>
+  
+  
+      <rect x="104" y="315" width="1712" height="520" rx="42" fill="#ffffff" stroke="#dadce0" stroke-width="2"/>
+      <circle cx="1460" cy="570" r="190" fill="#e8f0fe"/>
+      <circle cx="1565" cy="512" r="72" fill="#fef7e0"/>
+      <circle cx="1370" cy="440" r="48" fill="#e6f4ea"/>
+      <text x="170" y="455" font-size="66" font-weight="800" fill="#202124" text-anchor="start"><tspan x="170" dy="0">人がサイトを探す時代から、AIが商品</tspan><tspan x="170" dy="86">を選ぶ時代へ</tspan></text>
+      <text x="174" y="690" font-size="35" font-weight="500" fill="#5f6368" text-anchor="start"><tspan x="174" dy="0">EC事業者は「見た目のサイト」だけでなく、「AIが読める商品デー</tspan><tspan x="174" dy="52">タ」を整える必要がある。</tspan></text>
+    
+</svg>

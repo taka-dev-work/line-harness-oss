@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1920" viewBox="0 0 1920 1920">
+  <style>
+    text { font-family: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans CJK JP", "Yu Gothic", sans-serif; letter-spacing: 0; }
+  </style>
+  <rect width="1920" height="1920" fill="#f8fbff"/>
+  <g transform="translate(0 420)">
+    
+    <rect width="1920" height="1080" fill="#f8fbff"/>
+    <circle cx="1730" cy="96" r="18" fill="#1a73e8"/>
+    <circle cx="1780" cy="96" r="18" fill="#ea4335"/>
+    <circle cx="1830" cy="96" r="18" fill="#fbbc04"/>
+    <circle cx="1880" cy="96" r="18" fill="#34a853"/>
+    <g><rect x="104" y="78" width="240" height="54" rx="27" fill="#e8f0fe" stroke="#1a73e8" stroke-width="2"/><text x="132" y="114" font-size="24" font-weight="700" fill="#1a73e8">全体像</text></g>
+    <text x="104" y="225" font-size="62" font-weight="800" fill="#202124" text-anchor="start"><tspan x="104" dy="0">EC事業者への3大インパクト</tspan></text>
+    <text x="104" y="1010" font-size="24" fill="#5f6368">05 / 16  |  AI x EC Strategy</text>
+  
+    
+      
+            <rect x="130" y="380" width="500" height="390" rx="28" fill="#ffffff" stroke="#1a73e8" stroke-width="2"/>
+            <rect x="164" y="420" width="84" height="12" rx="6" fill="#1a73e8"/>
+            <text x="164" y="500" font-size="42" font-weight="800" fill="#202124" text-anchor="start"><tspan x="164" dy="0">検索が購買エージェント</tspan><tspan x="164" dy="56">へ</tspan></text>
+            <text x="164" y="630" font-size="31" font-weight="500" fill="#5f6368" text-anchor="start"><tspan x="164" dy="0">サイト訪問より、AI画面内で選ばれる</tspan><tspan x="164" dy="46">ことが重要になる。</tspan></text>
+          
+            <rect x="720" y="380" width="500" height="390" rx="28" fill="#ffffff" stroke="#ea4335" stroke-width="2"/>
+            <rect x="754" y="420" width="84" height="12" rx="6" fill="#ea4335"/>
+            <text x="754" y="500" font-size="42" font-weight="800" fill="#202124" text-anchor="start"><tspan x="754" dy="0">AIが買い物を代理する</tspan></text>
+            <text x="754" y="630" font-size="31" font-weight="500" fill="#5f6368" text-anchor="start"><tspan x="754" dy="0">価格、在庫、レビューをAIが見て候補</tspan><tspan x="754" dy="46">を選ぶ。</tspan></text>
+          
+            <rect x="1310" y="380" width="500" height="390" rx="28" fill="#ffffff" stroke="#34a853" stroke-width="2"/>
+            <rect x="1344" y="420" width="84" height="12" rx="6" fill="#34a853"/>
+            <text x="1344" y="500" font-size="42" font-weight="800" fill="#202124" text-anchor="start"><tspan x="1344" dy="0">動画制作が高速化する</tspan></text>
+            <text x="1344" y="630" font-size="31" font-weight="500" fill="#5f6368" text-anchor="start"><tspan x="1344" dy="0">商品動画や短尺動画の競争が一気に増え</tspan><tspan x="1344" dy="46">る。</tspan></text>
+          
+    
+  </g>
+</svg>

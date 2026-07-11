@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080">
+  <style>
+    text { font-family: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans CJK JP", "Yu Gothic", sans-serif; letter-spacing: 0; }
+  </style>
+  
+    <rect width="1920" height="1080" fill="#f8fbff"/>
+    <circle cx="1730" cy="96" r="18" fill="#1a73e8"/>
+    <circle cx="1780" cy="96" r="18" fill="#ea4335"/>
+    <circle cx="1830" cy="96" r="18" fill="#fbbc04"/>
+    <circle cx="1880" cy="96" r="18" fill="#34a853"/>
+    <g><rect x="104" y="78" width="414" height="54" rx="27" fill="#e8f0fe" stroke="#1a73e8" stroke-width="2"/><text x="132" y="114" font-size="24" font-weight="700" fill="#1a73e8">Universal Cart的な世界</text></g>
+    <text x="104" y="225" font-size="62" font-weight="800" fill="#202124" text-anchor="start"><tspan x="104" dy="0">インパクト1：サイトに来ない購入が増える</tspan></text>
+    <text x="104" y="1010" font-size="24" fill="#5f6368">06 / 16  |  AI x EC Strategy</text>
+  
+  
+      <circle cx="960" cy="585" r="180" fill="#e8f0fe" stroke="#1a73e8" stroke-width="4"/>
+      <text x="960" y="555" font-size="40" font-weight="800" fill="#202124" text-anchor="middle"><tspan x="960" dy="0">Google / Gem</tspan><tspan x="960" dy="52">ini / YouTub</tspan><tspan x="960" dy="52">e</tspan></text>
+      
+            <rect x="360" y="500" width="230" height="110" rx="28" fill="#ffffff" stroke="#1a73e8" stroke-width="2"/>
+            <text x="475" y="568" font-size="32" font-weight="800" fill="#202124" text-anchor="middle">商品発見</text>
+            <line x1="590" y1="555" x2="790" y2="585" stroke="#1a73e8" stroke-width="8" stroke-linecap="round"/><path d="M 790 585 l -24 -16 l 0 32 z" fill="#1a73e8"/>
+          
+            <rect x="730" y="790" width="230" height="110" rx="28" fill="#ffffff" stroke="#ea4335" stroke-width="2"/>
+            <text x="845" y="858" font-size="32" font-weight="800" fill="#202124" text-anchor="middle">比較</text>
+            <line x1="960" y1="845" x2="790" y2="585" stroke="#ea4335" stroke-width="8" stroke-linecap="round"/><path d="M 790 585 l -24 -16 l 0 32 z" fill="#ea4335"/>
+          
+            <rect x="1135" y="790" width="230" height="110" rx="28" fill="#ffffff" stroke="#fbbc04" stroke-width="2"/>
+            <text x="1250" y="858" font-size="32" font-weight="800" fill="#202124" text-anchor="middle">カート</text>
+            <line x1="1135" y1="845" x2="1130" y2="585" stroke="#fbbc04" stroke-width="8" stroke-linecap="round"/><path d="M 1130 585 l -24 -16 l 0 32 z" fill="#fbbc04"/>
+          
+            <rect x="1420" y="500" width="230" height="110" rx="28" fill="#ffffff" stroke="#34a853" stroke-width="2"/>
+            <text x="1535" y="568" font-size="32" font-weight="800" fill="#202124" text-anchor="middle">決済</text>
+            <line x1="1420" y1="555" x2="1130" y2="585" stroke="#34a853" stroke-width="8" stroke-linecap="round"/><path d="M 1130 585 l -24 -16 l 0 32 z" fill="#34a853"/>
+          
+      <text x="250" y="920" font-size="36" font-weight="700" fill="#5f6368" text-anchor="start"><tspan x="250" dy="0">ECサイトは「店舗」だけでなく、商品データの供給元になる。</tspan></text>
+    
+</svg>

@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080">
+  <style>
+    text { font-family: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans CJK JP", "Yu Gothic", sans-serif; letter-spacing: 0; }
+  </style>
+  
+    <rect width="1920" height="1080" fill="#f8fbff"/>
+    <circle cx="1730" cy="96" r="18" fill="#1a73e8"/>
+    <circle cx="1780" cy="96" r="18" fill="#ea4335"/>
+    <circle cx="1830" cy="96" r="18" fill="#fbbc04"/>
+    <circle cx="1880" cy="96" r="18" fill="#34a853"/>
+    <g><rect x="104" y="78" width="240" height="54" rx="27" fill="#e8f0fe" stroke="#1a73e8" stroke-width="2"/><text x="132" y="114" font-size="24" font-weight="700" fill="#1a73e8">これからのKPI</text></g>
+    <text x="104" y="225" font-size="62" font-weight="800" fill="#202124" text-anchor="start"><tspan x="104" dy="0">新しい売上方程式</tspan></text>
+    <text x="104" y="1010" font-size="24" fill="#5f6368">15 / 16  |  AI x EC Strategy</text>
+  
+  
+      <rect x="160" y="340" width="1600" height="170" rx="28" fill="#fce8e6" stroke="#ea4335" stroke-width="2"/>
+      <text x="960" y="445" font-size="48" font-weight="800" fill="#ea4335" text-anchor="middle">売上 = アクセス数 × 転換率 × 客単価</text>
+      <text x="960" y="570" font-size="58" font-weight="900" fill="#202124" text-anchor="middle">↓</text>
+      <rect x="160" y="620" width="1600" height="170" rx="28" fill="#e6f4ea" stroke="#34a853" stroke-width="2"/>
+      <text x="960" y="725" font-size="48" font-weight="900" fill="#34a853" text-anchor="middle">売上 = AI経由の自動購入 + ファンの指名買い</text>
+      <text x="245" y="870" font-size="30" font-weight="700" fill="#5f6368" text-anchor="start"><tspan x="245" dy="0">AI経由：商品データの正確さ、在庫同期、決済のしやすさ</tspan></text><text x="245" y="922" font-size="30" font-weight="700" fill="#5f6368" text-anchor="start"><tspan x="245" dy="0">指名買い：ブランドの熱量、レビュー、直接つながる顧客</tspan></text>
+    
+</svg>

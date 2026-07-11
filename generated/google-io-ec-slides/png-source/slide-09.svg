@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1920" viewBox="0 0 1920 1920">
+  <style>
+    text { font-family: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans CJK JP", "Yu Gothic", sans-serif; letter-spacing: 0; }
+  </style>
+  <rect width="1920" height="1920" fill="#f8fbff"/>
+  <g transform="translate(0 420)">
+    
+    <rect width="1920" height="1080" fill="#f8fbff"/>
+    <circle cx="1730" cy="96" r="18" fill="#1a73e8"/>
+    <circle cx="1780" cy="96" r="18" fill="#ea4335"/>
+    <circle cx="1830" cy="96" r="18" fill="#fbbc04"/>
+    <circle cx="1880" cy="96" r="18" fill="#34a853"/>
+    <g><rect x="104" y="78" width="240" height="54" rx="27" fill="#e8f0fe" stroke="#1a73e8" stroke-width="2"/><text x="132" y="114" font-size="24" font-weight="700" fill="#1a73e8">重要な考え方</text></g>
+    <text x="104" y="225" font-size="62" font-weight="800" fill="#202124" text-anchor="start"><tspan x="104" dy="0">これからのWebは二重構造になる</tspan></text>
+    <text x="104" y="1010" font-size="24" fill="#5f6368">09 / 16  |  AI x EC Strategy</text>
+  
+    
+      <rect x="130" y="345" width="770" height="470" rx="28" fill="#ffffff" stroke="#1a73e8" stroke-width="2"/>
+      <rect x="1020" y="345" width="770" height="470" rx="28" fill="#ffffff" stroke="#34a853" stroke-width="2"/>
+      <text x="185" y="430" font-size="46" font-weight="800" fill="#1a73e8">人間が見るWebページ</text>
+      <text x="1075" y="430" font-size="46" font-weight="800" fill="#34a853">AIが読むデータシート</text>
+      <text x="188" y="515" font-size="38" font-weight="650" fill="#202124" text-anchor="start"><tspan x="188" dy="0">・世界観</tspan></text><text x="188" y="590" font-size="38" font-weight="650" fill="#202124" text-anchor="start"><tspan x="188" dy="0">・ストーリー</tspan></text><text x="188" y="665" font-size="38" font-weight="650" fill="#202124" text-anchor="start"><tspan x="188" dy="0">・安心感</tspan></text><text x="188" y="740" font-size="38" font-weight="650" fill="#202124" text-anchor="start"><tspan x="188" dy="0">・買いたい気持ち</tspan></text>
+      <text x="1078" y="515" font-size="38" font-weight="650" fill="#202124" text-anchor="start"><tspan x="1078" dy="0">・JSON-LD</tspan></text><text x="1078" y="590" font-size="38" font-weight="650" fill="#202124" text-anchor="start"><tspan x="1078" dy="0">・商品フィード</tspan></text><text x="1078" y="665" font-size="38" font-weight="650" fill="#202124" text-anchor="start"><tspan x="1078" dy="0">・API</tspan></text><text x="1078" y="740" font-size="38" font-weight="650" fill="#202124" text-anchor="start"><tspan x="1078" dy="0">・価格・在庫・属性</tspan></text>
+      <text x="235" y="895" font-size="36" font-weight="700" fill="#5f6368" text-anchor="start"><tspan x="235" dy="0">どちらか一方ではなく、役割を分けて両方を強くする。</tspan></text>
+    
+  </g>
+</svg>

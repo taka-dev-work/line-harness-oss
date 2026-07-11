@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1920" viewBox="0 0 1920 1920">
+  <style>
+    text { font-family: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans CJK JP", "Yu Gothic", sans-serif; letter-spacing: 0; }
+  </style>
+  <rect width="1920" height="1920" fill="#f8fbff"/>
+  <g transform="translate(0 420)">
+    
+    <rect width="1920" height="1080" fill="#f8fbff"/>
+    <circle cx="1730" cy="96" r="18" fill="#1a73e8"/>
+    <circle cx="1780" cy="96" r="18" fill="#ea4335"/>
+    <circle cx="1830" cy="96" r="18" fill="#fbbc04"/>
+    <circle cx="1880" cy="96" r="18" fill="#34a853"/>
+    <g><rect x="104" y="78" width="240" height="54" rx="27" fill="#e8f0fe" stroke="#1a73e8" stroke-width="2"/><text x="132" y="114" font-size="24" font-weight="700" fill="#1a73e8">結論</text></g>
+    <text x="104" y="225" font-size="62" font-weight="800" fill="#202124" text-anchor="start"><tspan x="104" dy="0">Webページの価値は消えるのか？</tspan></text>
+    <text x="104" y="1010" font-size="24" fill="#5f6368">10 / 16  |  AI x EC Strategy</text>
+  
+    
+      <rect x="170" y="340" width="1580" height="180" rx="28" fill="#e8f0fe" stroke="#1a73e8" stroke-width="2"/>
+      <text x="960" y="455" font-size="64" font-weight="900" fill="#1a73e8" text-anchor="middle">消えるのではなく、役割が変わる</text>
+      <rect x="250" y="605" width="1420" height="76" rx="28" fill="#ffffff" stroke="#ea4335" stroke-width="2"/><circle cx="300" cy="643" r="14" fill="#ea4335"/><text x="335" y="655" font-size="34" font-weight="700" fill="#202124" text-anchor="start"><tspan x="335" dy="0">スペックだけのページは価値が下がる。</tspan></text><rect x="250" y="710" width="1420" height="76" rx="28" fill="#ffffff" stroke="#fbbc04" stroke-width="2"/><circle cx="300" cy="748" r="14" fill="#fbbc04"/><text x="335" y="760" font-size="34" font-weight="700" fill="#202124" text-anchor="start"><tspan x="335" dy="0">ブランドの信頼や熱量を伝えるページは価値が上がる。</tspan></text><rect x="250" y="815" width="1420" height="76" rx="28" fill="#ffffff" stroke="#34a853" stroke-width="2"/><circle cx="300" cy="853" r="14" fill="#34a853"/><text x="335" y="865" font-size="34" font-weight="700" fill="#202124" text-anchor="start"><tspan x="335" dy="0">AIに運んでもらい、最後は人に選ばれる状態を作る。</tspan></text>
+    
+  </g>
+</svg>

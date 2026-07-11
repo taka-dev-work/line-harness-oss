@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080">
+  <style>
+    text { font-family: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans CJK JP", "Yu Gothic", sans-serif; letter-spacing: 0; }
+  </style>
+  
+    <rect width="1920" height="1080" fill="#f8fbff"/>
+    <circle cx="1730" cy="96" r="18" fill="#1a73e8"/>
+    <circle cx="1780" cy="96" r="18" fill="#ea4335"/>
+    <circle cx="1830" cy="96" r="18" fill="#fbbc04"/>
+    <circle cx="1880" cy="96" r="18" fill="#34a853"/>
+    <g><rect x="104" y="78" width="253" height="54" rx="27" fill="#e8f0fe" stroke="#1a73e8" stroke-width="2"/><text x="132" y="114" font-size="24" font-weight="700" fill="#1a73e8">AIエージェント最適化</text></g>
+    <text x="104" y="225" font-size="62" font-weight="800" fill="#202124" text-anchor="start"><tspan x="104" dy="0">インパクト2：AIに伝わる商品だけが残る</tspan></text>
+    <text x="104" y="1010" font-size="24" fill="#5f6368">07 / 16  |  AI x EC Strategy</text>
+  
+  
+      <rect x="135" y="355" width="755" height="500" rx="28" fill="#fce8e6" stroke="#ea4335" stroke-width="2"/>
+      <rect x="1030" y="355" width="755" height="500" rx="28" fill="#e6f4ea" stroke="#34a853" stroke-width="2"/>
+      <text x="195" y="450" font-size="46" font-weight="800" fill="#ea4335">弱い商品データ</text>
+      <text x="1090" y="450" font-size="46" font-weight="800" fill="#34a853">強い商品データ</text>
+      <text x="200" y="545" font-size="40" font-weight="700" fill="#202124" text-anchor="start"><tspan x="200" dy="0">× 色名があいまい</tspan></text><text x="200" y="633" font-size="40" font-weight="700" fill="#202124" text-anchor="start"><tspan x="200" dy="0">× 在庫更新が遅い</tspan></text><text x="200" y="721" font-size="40" font-weight="700" fill="#202124" text-anchor="start"><tspan x="200" dy="0">× レビューが読みにくい</tspan></text>
+      <text x="1095" y="545" font-size="40" font-weight="700" fill="#202124" text-anchor="start"><tspan x="1095" dy="0">○ 属性が標準化</tspan></text><text x="1095" y="633" font-size="40" font-weight="700" fill="#202124" text-anchor="start"><tspan x="1095" dy="0">○ 価格・在庫が同期</tspan></text><text x="1095" y="721" font-size="40" font-weight="700" fill="#202124" text-anchor="start"><tspan x="1095" dy="0">○ レビューも構造化</tspan></text>
+    
+</svg>

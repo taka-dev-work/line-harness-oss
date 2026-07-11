@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080">
+  <style>
+    text { font-family: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans CJK JP", "Yu Gothic", sans-serif; letter-spacing: 0; }
+  </style>
+  
+    <rect width="1920" height="1080" fill="#f8fbff"/>
+    <circle cx="1730" cy="96" r="18" fill="#1a73e8"/>
+    <circle cx="1780" cy="96" r="18" fill="#ea4335"/>
+    <circle cx="1830" cy="96" r="18" fill="#fbbc04"/>
+    <circle cx="1880" cy="96" r="18" fill="#34a853"/>
+    <g><rect x="104" y="78" width="240" height="54" rx="27" fill="#e8f0fe" stroke="#1a73e8" stroke-width="2"/><text x="132" y="114" font-size="24" font-weight="700" fill="#1a73e8">実務チェック</text></g>
+    <text x="104" y="225" font-size="62" font-weight="800" fill="#202124" text-anchor="start"><tspan x="104" dy="0">明日からの優先順位</tspan></text>
+    <text x="104" y="1010" font-size="24" fill="#5f6368">16 / 16  |  AI x EC Strategy</text>
+  
+  
+      <rect x="160" y="350" width="760" height="215" rx="28" fill="#ffffff" stroke="#1a73e8" stroke-width="2"/><circle cx="230" cy="420" r="38" fill="#1a73e8"/><text x="230" y="433" font-size="40" font-weight="900" fill="#fff" text-anchor="middle">1</text><text x="290" y="416" font-size="38" font-weight="900" fill="#202124" text-anchor="start"><tspan x="290" dy="0">商品データを棚卸し</tspan></text><text x="290" y="480" font-size="30" font-weight="600" fill="#5f6368" text-anchor="start"><tspan x="290" dy="0">色、サイズ、素材、在庫、配送を正確にする</tspan></text><rect x="985" y="350" width="760" height="215" rx="28" fill="#ffffff" stroke="#ea4335" stroke-width="2"/><circle cx="1055" cy="420" r="38" fill="#ea4335"/><text x="1055" y="433" font-size="40" font-weight="900" fill="#fff" text-anchor="middle">2</text><text x="1115" y="416" font-size="38" font-weight="900" fill="#202124" text-anchor="start"><tspan x="1115" dy="0">AIが読む情報を整備</tspan></text><text x="1115" y="480" font-size="30" font-weight="600" fill="#5f6368" text-anchor="start"><tspan x="1115" dy="0">JSON-LD、FAQ、レビュー形式を見直す</tspan></text><rect x="160" y="630" width="760" height="215" rx="28" fill="#ffffff" stroke="#fbbc04" stroke-width="2"/><circle cx="230" cy="700" r="38" fill="#fbbc04"/><text x="230" y="713" font-size="40" font-weight="900" fill="#fff" text-anchor="middle">3</text><text x="290" y="696" font-size="38" font-weight="900" fill="#202124" text-anchor="start"><tspan x="290" dy="0">動画運用を始める</tspan></text><text x="290" y="760" font-size="30" font-weight="600" fill="#5f6368" text-anchor="start"><tspan x="290" dy="0">商品説明と利用シーンを短尺で出す</tspan></text><rect x="985" y="630" width="760" height="215" rx="28" fill="#ffffff" stroke="#34a853" stroke-width="2"/><circle cx="1055" cy="700" r="38" fill="#34a853"/><text x="1055" y="713" font-size="40" font-weight="900" fill="#fff" text-anchor="middle">4</text><text x="1115" y="696" font-size="38" font-weight="900" fill="#202124" text-anchor="start"><tspan x="1115" dy="0">直接つながる顧客を増やす</tspan></text><text x="1115" y="760" font-size="30" font-weight="600" fill="#5f6368" text-anchor="start"><tspan x="1115" dy="0">LINE、アプリ、メール、会員導線を強化する</tspan></text>
+    
+</svg>
