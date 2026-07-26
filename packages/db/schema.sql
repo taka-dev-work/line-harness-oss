@@ -114,6 +114,9 @@ CREATE TABLE IF NOT EXISTS broadcasts (
   segment_conditions TEXT,
   line_account_id TEXT,
   queue_locked_at TEXT,
+  queue_lease_token TEXT,
+  audience_cursor TEXT,
+  audience_materialized_at TEXT,
   created_at      TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%f', 'now', '+9 hours'))
 );
 
@@ -133,6 +136,7 @@ CREATE TABLE IF NOT EXISTS broadcast_deliveries (
   last_attempted_at    TEXT,
   sent_at              TEXT,
   last_error           TEXT,
+  claim_token          TEXT,
   created_at           TEXT NOT NULL,
   updated_at           TEXT NOT NULL,
   UNIQUE (broadcast_id, friend_id),
@@ -194,6 +198,7 @@ CREATE TABLE IF NOT EXISTS messages_log (
   scenario_step_id TEXT REFERENCES scenario_steps (id) ON DELETE SET NULL,
   delivery_type    TEXT CHECK (delivery_type IN ('push', 'reply', 'test')),
   source           TEXT,
+  broadcast_delivery_id TEXT,
   created_at       TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%f', 'now', '+9 hours'))
 );
 
@@ -201,6 +206,9 @@ CREATE INDEX IF NOT EXISTS idx_messages_log_friend_id ON messages_log (friend_id
 CREATE INDEX IF NOT EXISTS idx_messages_log_created_at ON messages_log (created_at);
 CREATE INDEX IF NOT EXISTS idx_messages_log_friend_source ON messages_log (friend_id, source);
 CREATE INDEX IF NOT EXISTS idx_messages_log_friend_direction_created ON messages_log (friend_id, direction, created_at);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_messages_log_broadcast_delivery
+  ON messages_log (broadcast_delivery_id)
+  WHERE broadcast_delivery_id IS NOT NULL;
 
 -- ============================================================
 -- Auto Replies

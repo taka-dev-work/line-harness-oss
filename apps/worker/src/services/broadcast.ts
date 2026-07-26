@@ -7,11 +7,15 @@ import {
   updateBroadcastBatchProgress,
   getBroadcastAudienceByTag,
   materializeBroadcastDeliveries,
-  expireBroadcastDeliveryRetryKeys,
+  acquireBroadcastQueueLease,
+  saveBroadcastAudiencePage,
   getRetryableBroadcastDeliveries,
-  markBroadcastDeliveryAttempt,
+  claimBroadcastDelivery,
   markBroadcastDeliverySent,
+  markBroadcastDeliveryFailed,
+  markBroadcastDeliveryUncertain,
   getBroadcastDeliveryCounts,
+  completeBroadcastQueue,
   jstNow,
   updateBroadcastLineRequestId,
   createBroadcastInsight,
@@ -20,8 +24,12 @@ import type {
   Broadcast,
   BroadcastAudienceFriend,
 } from '@line-crm/db';
+import { LineApiError } from '@line-crm/line-sdk';
 import type { LineClient } from '@line-crm/line-sdk';
 import type { Message } from '@line-crm/line-sdk';
+
+const AUDIENCE_MATERIALIZATION_LIMIT = 25;
+const DELIVERY_LIMIT = 8;
 
 function getRequiredBroadcastAccountId(broadcast: Broadcast): string {
   if (!broadcast.line_account_id) {
@@ -44,6 +52,7 @@ async function deliverBroadcastAudience(
 }> {
   const accountId = getRequiredBroadcastAccountId(broadcast);
   const now = jstNow();
+  const leaseToken = crypto.randomUUID();
 
   await materializeBroadcastDeliveries(
     db,
@@ -52,33 +61,84 @@ async function deliverBroadcastAudience(
     friends,
     now,
   );
-  await expireBroadcastDeliveryRetryKeys(db, broadcast.id, now);
-
-  const deliveries = await getRetryableBroadcastDeliveries(
+  const acquired = await acquireBroadcastQueueLease(
     db,
     broadcast.id,
-    accountId,
+    broadcast.batch_offset ?? 0,
+    leaseToken,
     now,
   );
-
-  for (const delivery of deliveries) {
-    await markBroadcastDeliveryAttempt(db, delivery.id);
-    try {
-      await lineClient.pushMessage(
-        delivery.line_user_id,
-        [message],
-        delivery.retry_key,
-      );
-      await markBroadcastDeliverySent(db, delivery, broadcast);
-      await onDurableSent?.();
-    } catch (error) {
-      // The persisted uncertain state and retry key cover both a network ambiguity
-      // and a crash after LINE accepted the request but before D1 recorded success.
-      throw error;
-    }
+  if (!acquired) {
+    throw new Error(`Broadcast ${broadcast.id} is already being delivered`);
   }
 
-  return getBroadcastDeliveryCounts(db, broadcast.id);
+  try {
+    const deliveries = await getRetryableBroadcastDeliveries(
+      db,
+      broadcast.id,
+      accountId,
+      DELIVERY_LIMIT,
+    );
+
+    for (const delivery of deliveries) {
+      const claimed = await claimBroadcastDelivery(
+        db,
+        delivery.id,
+        leaseToken,
+        jstNow(),
+      );
+      if (!claimed || claimed.status === 'manual_review') continue;
+
+      try {
+        await lineClient.pushMessage(
+          delivery.line_user_id,
+          [message],
+          delivery.retry_key,
+        );
+        if (!await markBroadcastDeliverySent(
+          db,
+          claimed,
+          broadcast,
+          leaseToken,
+          jstNow(),
+        )) {
+          return getBroadcastDeliveryCounts(db, broadcast.id);
+        }
+        await onDurableSent?.();
+      } catch (error) {
+        if (error instanceof LineApiError && !error.retryable) {
+          await markBroadcastDeliveryFailed(
+            db,
+            claimed.id,
+            leaseToken,
+            `LINE API ${error.status}`,
+            jstNow(),
+          );
+          continue;
+        }
+        await markBroadcastDeliveryUncertain(
+          db,
+          claimed.id,
+          leaseToken,
+          error instanceof LineApiError
+            ? `LINE API ${error.status}`
+            : 'LINE delivery result uncertain',
+          jstNow(),
+        );
+        throw error;
+      }
+    }
+
+    return getBroadcastDeliveryCounts(db, broadcast.id);
+  } finally {
+    await updateBroadcastBatchProgress(
+      db,
+      broadcast.id,
+      leaseToken,
+      true,
+      jstNow(),
+    );
+  }
 }
 
 export async function processBroadcastSend(
@@ -180,6 +240,23 @@ export async function processScheduledBroadcasts(
         .run();
       if (!lockResult.meta.changes || lockResult.meta.changes === 0) continue;
 
+      if (broadcast.target_type === 'tag' && broadcast.target_tag_id) {
+        const tagMarker = JSON.stringify({
+          operator: 'AND',
+          rules: [{ type: 'tag_exists', value: broadcast.target_tag_id }],
+        });
+        await db.prepare(
+          `UPDATE broadcasts
+           SET batch_offset = 0,
+               queue_locked_at = NULL, queue_lease_token = NULL,
+               audience_cursor = NULL, audience_materialized_at = NULL,
+               total_count = 0, success_count = 0,
+               segment_conditions = ?
+           WHERE id = ? AND status = 'sending'`,
+        ).bind(tagMarker, broadcast.id).run();
+        continue;
+      }
+
       // Resolve correct lineClient for this broadcast's account
       let deliveryClient = lineClient;
       const accountId = (broadcast as unknown as Record<string, unknown>).line_account_id as string | null;
@@ -242,30 +319,32 @@ async function processQueuedBroadcastBatches(
 ): Promise<void> {
   const segmentConditionsStr = broadcast.segment_conditions ?? null;
   const batchOffset = broadcast.batch_offset ?? 0;
+  const leaseToken = crypto.randomUUID();
 
-  // Acquire a lease without changing durable progress.
-  const lockResult = await db.prepare(
-    `UPDATE broadcasts
-     SET queue_locked_at = ?
-     WHERE id = ? AND batch_offset = ? AND queue_locked_at IS NULL`,
-  ).bind(jstNow(), broadcast.id, batchOffset).run();
-  if (!lockResult.meta.changes || lockResult.meta.changes === 0) {
-    // 他のCron実行が既に処理中 → スキップ
-    return;
-  }
+  if (!await acquireBroadcastQueueLease(
+    db,
+    broadcast.id,
+    batchOffset,
+    leaseToken,
+    jstNow(),
+  )) return;
 
   // auto-track（初回バッチのみ、offsetが0のとき）
   let finalType: string = broadcast.message_type;
   let finalContent = broadcast.message_content;
-  if (workerUrl && batchOffset === 0) {
+  if (workerUrl && batchOffset === 0 && !broadcast.audience_cursor) {
     const { autoTrackContent } = await import('./auto-track.js');
     const tracked = await autoTrackContent(db, broadcast.message_type, broadcast.message_content, workerUrl);
     finalType = tracked.messageType;
     finalContent = tracked.content;
     // 変換後のコンテンツを保存（次バッチ以降で使えるように）
     if (finalType !== broadcast.message_type || finalContent !== broadcast.message_content) {
-      await db.prepare('UPDATE broadcasts SET message_type = ?, message_content = ? WHERE id = ?')
-        .bind(finalType, finalContent, broadcast.id).run();
+      const result = await db.prepare(
+        `UPDATE broadcasts
+         SET message_type = ?, message_content = ?
+         WHERE id = ? AND queue_lease_token = ?`,
+      ).bind(finalType, finalContent, broadcast.id, leaseToken).run();
+      if (!result.meta.changes) return;
     }
   }
 
@@ -274,94 +353,198 @@ async function processQueuedBroadcastBatches(
   const message = buildMessage(finalType, finalContent, altText || undefined);
 
   const accountId = getRequiredBroadcastAccountId(broadcast);
-  let friends: BroadcastAudienceFriend[];
-  if (segmentConditionsStr) {
-    const { buildSegmentQuery } = await import('./segment-query.js');
-    const condition = JSON.parse(segmentConditionsStr);
-    const { sql, bindings } = buildSegmentQuery(condition);
-    const accountSql =
-      sql.replace('WHERE ', 'WHERE f.line_account_id = ? AND (') + ')';
-    const accountBindings = [accountId, ...bindings];
-    const result = await db.prepare(accountSql).bind(...accountBindings).all<{ id: string; line_user_id: string }>();
-    friends = result.results ?? [];
-  } else if (broadcast.target_tag_id) {
-    friends = await getBroadcastAudienceByTag(
-      db,
-      broadcast.target_tag_id,
-      accountId,
-    );
-  } else {
+  if (!segmentConditionsStr && !broadcast.target_tag_id) {
     // target_type='all' でキューに入ることはないが、念のため
     const { requestId } = await lineClient.broadcast([message]);
     await updateBroadcastLineRequestId(db, broadcast.id, requestId, null);
     await createBroadcastInsight(db, broadcast.id);
     await updateBroadcastStatus(db, broadcast.id, 'sent', { totalCount: 0, successCount: 0 });
+    await updateBroadcastBatchProgress(
+      db,
+      broadcast.id,
+      leaseToken,
+      true,
+      jstNow(),
+    );
     return;
   }
 
-  const unit = `bcast_${broadcast.id.slice(0, 8)}`;
-  const before = await getBroadcastDeliveryCounts(db, broadcast.id);
-  let currentOffset = Math.max(batchOffset, before.sentCount);
-
   try {
-    const counts = await deliverBroadcastAudience(
-      db,
-      lineClient,
-      broadcast,
-      friends,
-      message,
-      async () => {
-        currentOffset += 1;
-        await updateBroadcastBatchProgress(
+    const rawBroadcast = broadcast as unknown as Record<string, unknown>;
+    if (!rawBroadcast.audience_materialized_at) {
+      const cursor = typeof rawBroadcast.audience_cursor === 'string'
+        ? rawBroadcast.audience_cursor
+        : '';
+      let friends: BroadcastAudienceFriend[];
+
+      if (segmentConditionsStr) {
+        const { buildSegmentQuery } = await import('./segment-query.js');
+        const condition = JSON.parse(segmentConditionsStr);
+        const { sql, bindings } = buildSegmentQuery(condition);
+        const accountSql =
+          sql.replace('WHERE ', 'WHERE f.line_account_id = ? AND (') + ')';
+        const pagedSql =
+          `SELECT page.id, page.line_user_id
+           FROM (${accountSql}) page
+           WHERE page.id > ?
+           ORDER BY page.id ASC
+           LIMIT ?`;
+        const result = await db
+          .prepare(pagedSql)
+          .bind(
+            accountId,
+            ...bindings,
+            cursor,
+            AUDIENCE_MATERIALIZATION_LIMIT,
+          )
+          .all<BroadcastAudienceFriend>();
+        friends = result.results ?? [];
+      } else {
+        friends = await getBroadcastAudienceByTag(
           db,
-          broadcast.id,
-          currentOffset,
-          1,
+          broadcast.target_tag_id!,
+          accountId,
+          cursor,
+          AUDIENCE_MATERIALIZATION_LIMIT,
         );
-      },
+      }
+
+      await materializeBroadcastDeliveries(
+        db,
+        broadcast.id,
+        accountId,
+        friends,
+        jstNow(),
+      );
+
+      const complete = friends.length < AUDIENCE_MATERIALIZATION_LIMIT;
+      const nextCursor = friends.at(-1)?.id ?? cursor;
+      if (!await saveBroadcastAudiencePage(
+        db,
+        broadcast.id,
+        leaseToken,
+        nextCursor,
+        complete,
+        jstNow(),
+      )) return;
+      rawBroadcast.audience_cursor = nextCursor;
+      rawBroadcast.audience_materialized_at = complete ? jstNow() : null;
+      rawBroadcast.queue_locked_at = null;
+      rawBroadcast.queue_lease_token = null;
+
+      return;
+    }
+
+    const deliveries = await getRetryableBroadcastDeliveries(
+      db,
+      broadcast.id,
+      accountId,
+      DELIVERY_LIMIT,
     );
 
-    if (counts.sentCount + counts.manualReviewCount < counts.totalCount) {
+    for (const delivery of deliveries) {
+      const claimed = await claimBroadcastDelivery(
+        db,
+        delivery.id,
+        leaseToken,
+        jstNow(),
+      );
+      if (!claimed) return;
+      if (claimed.status === 'manual_review') {
+        if (!await updateBroadcastBatchProgress(
+          db,
+          broadcast.id,
+          leaseToken,
+          false,
+          jstNow(),
+        )) return;
+        continue;
+      }
+
+      try {
+        await lineClient.pushMessage(
+          delivery.line_user_id,
+          [message],
+          claimed.retry_key,
+        );
+        if (!await markBroadcastDeliverySent(
+          db,
+          claimed,
+          broadcast,
+          leaseToken,
+          jstNow(),
+        )) return;
+      } catch (error) {
+        if (error instanceof LineApiError && !error.retryable) {
+          if (!await markBroadcastDeliveryFailed(
+            db,
+            claimed.id,
+            leaseToken,
+            `LINE API ${error.status}`,
+            jstNow(),
+          )) return;
+        } else {
+          await markBroadcastDeliveryUncertain(
+            db,
+            claimed.id,
+            leaseToken,
+            error instanceof LineApiError
+              ? `LINE API ${error.status}`
+              : 'LINE delivery result uncertain',
+            jstNow(),
+          );
+          await updateBroadcastBatchProgress(
+            db,
+            broadcast.id,
+            leaseToken,
+            true,
+            jstNow(),
+          );
+          return;
+        }
+      }
+
+      if (!await updateBroadcastBatchProgress(
+        db,
+        broadcast.id,
+        leaseToken,
+        false,
+        jstNow(),
+      )) return;
+    }
+
+    const counts = await getBroadcastDeliveryCounts(db, broadcast.id);
+    if (counts.remainingCount > 0) {
       await updateBroadcastBatchProgress(
         db,
         broadcast.id,
-        counts.sentCount,
-        0,
+        leaseToken,
         true,
+        jstNow(),
       );
       return;
     }
 
-    await db
-      .prepare(
-        `UPDATE broadcasts
-         SET total_count = ?, success_count = ?, batch_offset = ?,
-             queue_locked_at = NULL
-         WHERE id = ?`,
-      )
-      .bind(
-        counts.totalCount,
-        counts.sentCount,
-        counts.sentCount,
-        broadcast.id,
-      )
-      .run();
+    const unit = `bcast_${broadcast.id.slice(0, 8)}`;
+    if (!await completeBroadcastQueue(
+      db,
+      broadcast.id,
+      leaseToken,
+      unit,
+      jstNow(),
+    )) return;
+    await createBroadcastInsight(db, broadcast.id);
   } catch (err) {
-    console.error('Queued broadcast target send failed:', err);
-    const counts = await getBroadcastDeliveryCounts(db, broadcast.id);
+    console.error(`Queued broadcast ${broadcast.id} processing failed`);
     await updateBroadcastBatchProgress(
       db,
       broadcast.id,
-      counts.sentCount,
-      0,
+      leaseToken,
       true,
+      jstNow(),
     );
     return;
   }
-
-  await updateBroadcastLineRequestId(db, broadcast.id, null, unit);
-  await createBroadcastInsight(db, broadcast.id);
-  await updateBroadcastStatus(db, broadcast.id, 'sent');
 }
 
 export function buildMessage(messageType: string, messageContent: string, altText?: string): Message {

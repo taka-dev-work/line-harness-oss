@@ -1,6 +1,11 @@
-import { describe, expect, it, vi } from 'vitest';
-import { recoverStalledBroadcasts } from '@line-crm/db';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { execFileSync } from 'node:child_process';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { jstNow, recoverStalledBroadcasts } from '@line-crm/db';
 import type { Broadcast } from '@line-crm/db';
+import { LineApiError } from '@line-crm/line-sdk';
 import type { LineClient } from '@line-crm/line-sdk';
 import { processBroadcastSend, processQueuedBroadcasts } from './broadcast.js';
 
@@ -26,6 +31,7 @@ type DeliveryRow = {
   retry_key_created_at: string;
   first_attempted_at: string | null;
   last_error: string | null;
+  claim_token?: string | null;
 };
 
 function makeBroadcast(overrides: Partial<Broadcast & Record<string, unknown>> = {}) {
@@ -45,6 +51,10 @@ function makeBroadcast(overrides: Partial<Broadcast & Record<string, unknown>> =
     line_account_id: ACCOUNT_A,
     batch_offset: 0,
     segment_conditions: null,
+    queue_locked_at: null,
+    queue_lease_token: null,
+    audience_cursor: null,
+    audience_materialized_at: null,
     ...overrides,
   } as Broadcast;
 }
@@ -80,6 +90,7 @@ class FakeD1 {
   readonly boundSql: Array<{ sql: string; bindings: unknown[] }> = [];
   readonly deliveries = new Map<string, DeliveryRow>();
   readonly messageLog: string[] = [];
+  private readonly loggedDeliveryIds = new Set<string>();
   failNextSentRecord = false;
 
   constructor(
@@ -92,11 +103,71 @@ class FakeD1 {
   }
 
   async batch(statements: FakeStatement[]) {
-    for (const statement of statements) await statement.run();
-    return statements.map(() => ({ success: true }));
+    const deliverySnapshot = [...this.deliveries.entries()].map(
+      ([key, value]) => [key, { ...value }] as const,
+    );
+    const messageLogSnapshot = [...this.messageLog];
+    const loggedDeliverySnapshot = [...this.loggedDeliveryIds];
+    const broadcastSnapshot = {
+      ...(this.broadcast as unknown as Record<string, unknown>),
+    };
+
+    try {
+      const results = [];
+      for (const statement of statements) results.push(await statement.run());
+      return results;
+    } catch (error) {
+      this.deliveries.clear();
+      for (const [key, value] of deliverySnapshot) {
+        this.deliveries.set(key, value);
+      }
+      this.messageLog.splice(0, this.messageLog.length, ...messageLogSnapshot);
+      this.loggedDeliveryIds.clear();
+      for (const id of loggedDeliverySnapshot) this.loggedDeliveryIds.add(id);
+      Object.assign(this.broadcast, broadcastSnapshot);
+      throw error;
+    }
   }
 
   first(sql: string, bindings: unknown[]) {
+    if (sql.includes('UPDATE broadcast_deliveries') && sql.includes('RETURNING *')) {
+      const now = String(bindings[0]);
+      const deliveryId = String(bindings.at(-2));
+      const leaseToken = String(bindings.at(-1));
+      const raw = this.broadcast as unknown as Record<string, unknown>;
+      const delivery = [...this.deliveries.values()].find(
+        (row) => row.id === deliveryId,
+      );
+      if (
+        !delivery ||
+        !['pending', 'uncertain'].includes(delivery.status) ||
+        raw.queue_lease_token !== leaseToken
+      ) {
+        return null;
+      }
+
+      const ageMs = delivery.first_attempted_at
+        ? new Date(now).getTime() -
+          new Date(delivery.first_attempted_at).getTime()
+        : 0;
+      if (delivery.first_attempted_at && ageMs >= 24 * 60 * 60_000) {
+        delivery.status = 'manual_review';
+        delivery.claim_token = null;
+        delivery.last_error =
+          'LINE retry key expired after 24 hours; manual review required';
+      } else {
+        delivery.status = 'uncertain';
+        delivery.attempt_count += 1;
+        delivery.first_attempted_at ??= now;
+        delivery.claim_token = leaseToken;
+      }
+      return {
+        ...delivery,
+        line_user_id: this.friends.find(
+          (friend) => friend.id === delivery.friend_id,
+        )?.line_user_id,
+      };
+    }
     if (sql.includes('FROM broadcasts b')) return this.broadcast;
     if (sql.includes('FROM line_accounts')) return null;
     if (sql.includes('COUNT(*)') && sql.includes('broadcast_deliveries')) {
@@ -105,6 +176,10 @@ class FakeD1 {
         total_count: rows.length,
         sent_count: rows.filter((d) => d.status === 'sent').length,
         manual_review_count: rows.filter((d) => d.status === 'manual_review').length,
+        failed_count: rows.filter((d) => d.status === 'failed').length,
+        remaining_count: rows.filter((d) =>
+          ['pending', 'uncertain'].includes(d.status),
+        ).length,
       };
     }
     return null;
@@ -116,33 +191,46 @@ class FakeD1 {
       sql.includes("status = 'sending'")
     ) {
       const raw = this.broadcast as unknown as Record<string, unknown>;
-      return raw.queue_locked_at ? [] : [this.broadcast];
+      return raw.queue_locked_at || raw.queue_lease_token
+        ? []
+        : [this.broadcast];
     }
     if (sql.includes('FROM friends f') && sql.includes('friend_tags')) {
       const [accountId, tagId] = sql.indexOf('f.line_account_id = ?') < sql.indexOf('ft.tag_id = ?')
         ? bindings
         : [bindings[1], bindings[0]];
+      const cursor = String(bindings.at(-2) ?? '');
+      const limit = Number(bindings.at(-1) ?? 25);
       return this.friends.filter(
         (f) =>
           f.line_account_id === accountId &&
           f.tag_id === tagId &&
-          f.is_following === 1,
-      );
+          f.is_following === 1 &&
+          f.id > cursor,
+      ).sort((a, b) => a.id.localeCompare(b.id)).slice(0, limit);
     }
     if (sql.includes('FROM friends f WHERE')) {
       const accountId = bindings[0];
+      const cursor = String(bindings.at(-2) ?? '');
+      const limit = Number(bindings.at(-1) ?? 25);
       return this.friends.filter(
-        (f) => f.line_account_id === accountId && f.is_following === 1,
-      );
+        (f) =>
+          f.line_account_id === accountId &&
+          f.is_following === 1 &&
+          f.id > cursor,
+      ).sort((a, b) => a.id.localeCompare(b.id)).slice(0, limit);
     }
     if (sql.includes('FROM broadcast_deliveries')) {
+      const limit = Number(bindings.at(-1) ?? 8);
       return [...this.deliveries.values()]
         .filter((d) => d.broadcast_id === bindings[0])
-        .filter((d) => ['pending', 'failed', 'uncertain'].includes(d.status))
+        .filter((d) => d.line_account_id === bindings[1])
+        .filter((d) => ['pending', 'uncertain'].includes(d.status))
         .map((d) => ({
           ...d,
           line_user_id: this.friends.find((f) => f.id === d.friend_id)?.line_user_id,
-        }));
+        }))
+        .slice(0, limit);
     }
     return [];
   }
@@ -167,63 +255,102 @@ class FakeD1 {
           retry_key_created_at: retryKeyCreatedAt,
           first_attempted_at: null,
           last_error: null,
+          claim_token: null,
         });
       }
       return { meta: { changes: 1 } };
     }
-    if (sql.includes("SET status = 'manual_review'")) {
-      for (const delivery of this.deliveries.values()) {
-        const ageMs =
-          new Date(String(bindings[0])).getTime() -
-          new Date(String(delivery.first_attempted_at)).getTime();
-        if (
-          delivery.broadcast_id === bindings[1] &&
-          delivery.first_attempted_at !== null &&
-          ageMs >= 24 * 60 * 60_000
-        ) {
-          delivery.status = 'manual_review';
-        }
-      }
-      return { meta: { changes: 1 } };
-    }
-    if (sql.includes("SET status = 'uncertain'")) {
-      const delivery = [...this.deliveries.values()].find((d) => d.id === bindings.at(-1));
-      if (delivery) {
-        delivery.status = 'uncertain';
-        delivery.attempt_count += 1;
-        delivery.first_attempted_at ??= String(bindings[0]);
-      }
-      return { meta: { changes: delivery ? 1 : 0 } };
-    }
     if (sql.includes("SET status = 'sent'") && sql.includes('broadcast_deliveries')) {
+      const delivery = [...this.deliveries.values()].find(
+        (row) => row.id === bindings[2],
+      );
+      const raw = this.broadcast as unknown as Record<string, unknown>;
+      if (
+        !delivery ||
+        delivery.claim_token !== bindings[3] ||
+        raw.queue_lease_token !== bindings[4]
+      ) return { meta: { changes: 0 } };
       if (this.failNextSentRecord) {
         this.failNextSentRecord = false;
         throw new Error('simulated crash after LINE acceptance');
       }
-      const delivery = [...this.deliveries.values()].find((d) => d.id === bindings.at(-1));
-      if (delivery) delivery.status = 'sent';
-      return { meta: { changes: delivery ? 1 : 0 } };
+      delivery.status = 'sent';
+      delivery.last_error = null;
+      return { meta: { changes: 1 } };
     }
     if (sql.includes("SET status = 'failed'") && sql.includes('broadcast_deliveries')) {
-      const delivery = [...this.deliveries.values()].find((d) => d.id === bindings.at(-1));
-      if (delivery) {
-        delivery.status = 'failed';
-        delivery.last_error = String(bindings[0]);
-      }
-      return { meta: { changes: delivery ? 1 : 0 } };
+      const delivery = [...this.deliveries.values()].find(
+        (row) => row.id === bindings[2],
+      );
+      const raw = this.broadcast as unknown as Record<string, unknown>;
+      if (
+        !delivery ||
+        delivery.claim_token !== bindings[3] ||
+        raw.queue_lease_token !== bindings[4]
+      ) return { meta: { changes: 0 } };
+      delivery.status = 'failed';
+      delivery.last_error = String(bindings[0]);
+      delivery.claim_token = null;
+      return { meta: { changes: 1 } };
+    }
+    if (
+      sql.includes('UPDATE broadcast_deliveries') &&
+      sql.includes('SET last_error = ?')
+    ) {
+      const delivery = [...this.deliveries.values()].find(
+        (row) => row.id === bindings[2],
+      );
+      const raw = this.broadcast as unknown as Record<string, unknown>;
+      if (
+        !delivery ||
+        delivery.claim_token !== bindings[3] ||
+        raw.queue_lease_token !== bindings[4]
+      ) return { meta: { changes: 0 } };
+      delivery.last_error = String(bindings[0]);
+      return { meta: { changes: 1 } };
     }
     if (sql.includes('INSERT INTO messages_log')) {
+      const deliveryId = String(bindings[5]);
+      const delivery = [...this.deliveries.values()].find(
+        (row) => row.id === deliveryId,
+      );
+      const raw = this.broadcast as unknown as Record<string, unknown>;
+      if (
+        !delivery ||
+        delivery.status !== 'sent' ||
+        delivery.claim_token !== bindings[8] ||
+        raw.queue_lease_token !== bindings[9] ||
+        this.loggedDeliveryIds.has(deliveryId)
+      ) return { meta: { changes: 0 } };
+      this.loggedDeliveryIds.add(deliveryId);
       this.messageLog.push(String(bindings[1]));
       return { meta: { changes: 1 } };
     }
     if (
-      sql.includes('SET queue_locked_at = ?') &&
+      sql.includes('SET queue_locked_at = ?, queue_lease_token = ?') &&
       sql.includes('queue_locked_at IS NULL')
     ) {
       const raw = this.broadcast as unknown as Record<string, unknown>;
-      if (raw.batch_offset !== bindings.at(-1)) return { meta: { changes: 0 } };
-      if (raw.queue_locked_at) return { meta: { changes: 0 } };
+      if (raw.batch_offset !== bindings[3]) return { meta: { changes: 0 } };
+      if (raw.queue_locked_at || raw.queue_lease_token) {
+        return { meta: { changes: 0 } };
+      }
       raw.queue_locked_at = bindings[0];
+      raw.queue_lease_token = bindings[1];
+      return { meta: { changes: 1 } };
+    }
+    if (sql.includes('SET audience_cursor = ?')) {
+      const raw = this.broadcast as unknown as Record<string, unknown>;
+      if (raw.queue_lease_token !== bindings[4]) {
+        return { meta: { changes: 0 } };
+      }
+      raw.audience_cursor = bindings[0];
+      raw.audience_materialized_at = bindings[1] === 1 ? bindings[2] : null;
+      this.broadcast.total_count = [...this.deliveries.values()].filter(
+        (delivery) => delivery.broadcast_id === this.broadcast.id,
+      ).length;
+      raw.queue_locked_at = null;
+      raw.queue_lease_token = null;
       return { meta: { changes: 1 } };
     }
     if (
@@ -240,24 +367,56 @@ class FakeD1 {
           (delivery) => delivery.status === 'sent',
         ).length;
         raw.queue_locked_at = null;
+        raw.queue_lease_token = null;
       }
       return { meta: { changes: 1 } };
     }
     if (
       sql.includes('UPDATE broadcasts') &&
-      sql.includes('SET batch_offset = ?')
+      sql.includes('SET batch_offset = (')
     ) {
       const raw = this.broadcast as unknown as Record<string, unknown>;
-      raw.batch_offset = bindings[0];
-      this.broadcast.success_count += Number(bindings[1] ?? 0);
-      if (
-        sql.includes('queue_locked_at = NULL') ||
-        (sql.includes('CASE WHEN') && bindings[2] === 1)
-      ) {
-        raw.queue_locked_at = null;
-      } else if (sql.includes('CASE WHEN')) {
-        raw.queue_locked_at = bindings[3];
+      if (raw.queue_lease_token !== bindings[4]) {
+        return { meta: { changes: 0 } };
       }
+      raw.batch_offset = [...this.deliveries.values()].filter((delivery) =>
+        ['sent', 'failed', 'manual_review'].includes(delivery.status),
+      ).length;
+      this.broadcast.success_count = [...this.deliveries.values()].filter(
+        (delivery) => delivery.status === 'sent',
+      ).length;
+      if (bindings[0] === 1) {
+        raw.queue_locked_at = null;
+        raw.queue_lease_token = null;
+      } else {
+        raw.queue_locked_at = bindings[1];
+      }
+      return { meta: { changes: 1 } };
+    }
+    if (
+      sql.includes("SET status = 'sent',") &&
+      sql.includes('audience_materialized_at IS NOT NULL')
+    ) {
+      const raw = this.broadcast as unknown as Record<string, unknown>;
+      const remaining = [...this.deliveries.values()].some((delivery) =>
+        ['pending', 'uncertain'].includes(delivery.status),
+      );
+      if (
+        raw.queue_lease_token !== bindings[3] ||
+        !raw.audience_materialized_at ||
+        remaining
+      ) return { meta: { changes: 0 } };
+      this.broadcast.status = 'sent';
+      this.broadcast.sent_at = String(bindings[0]);
+      this.broadcast.total_count = this.deliveries.size;
+      this.broadcast.success_count = [...this.deliveries.values()].filter(
+        (delivery) => delivery.status === 'sent',
+      ).length;
+      raw.batch_offset = [...this.deliveries.values()].filter((delivery) =>
+        ['sent', 'failed', 'manual_review'].includes(delivery.status),
+      ).length;
+      raw.queue_locked_at = null;
+      raw.queue_lease_token = null;
       return { meta: { changes: 1 } };
     }
     if (sql.includes('UPDATE broadcasts SET success_count')) {
@@ -278,13 +437,14 @@ class FakeD1 {
 
 class FakeLineClient {
   readonly sends: Array<{ to: string; retryKey: string | undefined }> = [];
+  broadcastCalls = 0;
 
   constructor(
-    private readonly beforeSend?: (to: string) => void,
+    private readonly beforeSend?: (to: string) => void | Promise<void>,
   ) {}
 
   async pushMessage(to: string, _messages: unknown[], retryKey?: string) {
-    this.beforeSend?.(to);
+    await this.beforeSend?.(to);
     this.sends.push({ to, retryKey });
     return {};
   }
@@ -292,6 +452,11 @@ class FakeLineClient {
   async multicast(to: string[], _messages: unknown[], _units?: string[], retryKey?: string) {
     for (const lineUserId of to) this.sends.push({ to: lineUserId, retryKey });
     return { data: undefined, requestId: null };
+  }
+
+  async broadcast() {
+    this.broadcastCalls += 1;
+    return { data: undefined, requestId: 'all-request-id' };
   }
 }
 
@@ -303,7 +468,73 @@ function asLine(client: FakeLineClient) {
   return client as unknown as LineClient;
 }
 
+async function processMaterializedQueue(db: FakeD1, line: FakeLineClient) {
+  await processQueuedBroadcasts(asD1(db), asLine(line));
+  await processQueuedBroadcasts(asD1(db), asLine(line));
+}
+
+function sqliteScalar(databasePath: string, sql: string): string {
+  return execFileSync('sqlite3', [databasePath, sql], {
+    encoding: 'utf8',
+  }).trim();
+}
+
+afterEach(() => {
+  vi.useRealTimers();
+});
+
 describe('broadcast delivery isolation and idempotency', () => {
+  it('keeps a fresh +09:00 queue lease when SQLite compares it with UTC now', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'broadcast-lease-'));
+    const databasePath = join(directory, 'lease.sqlite');
+    try {
+      sqliteScalar(
+        databasePath,
+        `CREATE TABLE broadcasts (
+           id TEXT PRIMARY KEY,
+           status TEXT NOT NULL,
+           sent_at TEXT,
+           segment_conditions TEXT,
+           batch_offset INTEGER NOT NULL,
+           success_count INTEGER NOT NULL,
+           queue_locked_at TEXT,
+           queue_lease_token TEXT
+         );
+         CREATE TABLE broadcast_deliveries (
+           broadcast_id TEXT NOT NULL,
+           status TEXT NOT NULL
+         );
+         INSERT INTO broadcasts
+           (id, status, sent_at, segment_conditions, batch_offset,
+            success_count, queue_locked_at)
+         VALUES
+           ('broadcast-fresh', 'sending', NULL, '{}', 0, 0, '${jstNow()}');`,
+      );
+      const sqliteDb = {
+        prepare(sql: string) {
+          return {
+            async run() {
+              sqliteScalar(databasePath, sql);
+              return { meta: { changes: 0 } };
+            },
+          };
+        },
+      } as unknown as D1Database;
+
+      await recoverStalledBroadcasts(sqliteDb);
+
+      expect(
+        sqliteScalar(
+          databasePath,
+          `SELECT queue_locked_at IS NOT NULL
+           FROM broadcasts WHERE id = 'broadcast-fresh'`,
+        ),
+      ).toBe('1');
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
   it('uses account-scoped production tag SQL and excludes another account', async () => {
     const broadcast = makeBroadcast();
     const db = new FakeD1(broadcast, [
@@ -398,7 +629,7 @@ describe('broadcast delivery isolation and idempotency', () => {
 
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     try {
-      await processQueuedBroadcasts(asD1(db), asLine(new FakeLineClient()));
+      await processMaterializedQueue(db, new FakeLineClient());
     } finally {
       consoleSpy.mockRestore();
     }
@@ -434,7 +665,7 @@ describe('broadcast delivery isolation and idempotency', () => {
         raw.batch_offset === 1;
     });
 
-    await processQueuedBroadcasts(asD1(db), asLine(line));
+    await processMaterializedQueue(db, line);
 
     expect(lockHeldBeforeSecondSend).toBe(true);
   });
@@ -506,5 +737,182 @@ describe('broadcast delivery isolation and idempotency', () => {
 
     expect((broadcast as unknown as Record<string, unknown>).batch_offset).toBe(0);
     expect((broadcast as unknown as Record<string, unknown>).queue_locked_at).toBeNull();
+  });
+
+  it('marks an ordinary LINE 4xx terminal and continues later targets', async () => {
+    const broadcast = makeBroadcast({
+      status: 'sending',
+      segment_conditions: JSON.stringify({
+        operator: 'AND',
+        rules: [{ type: 'is_following', value: true }],
+      }),
+    });
+    const db = new FakeD1(broadcast, [
+      { id: 'friend-a', line_user_id: 'U-a', line_account_id: ACCOUNT_A, is_following: 1, tag_id: 'tag-1' },
+      { id: 'friend-b', line_user_id: 'U-b', line_account_id: ACCOUNT_A, is_following: 1, tag_id: 'tag-2' },
+    ]);
+    const line = new FakeLineClient((to) => {
+      if (to === 'U-a') throw new LineApiError(400, 'request-id');
+    });
+
+    await processMaterializedQueue(db, line);
+
+    expect([...db.deliveries.values()].find((d) => d.friend_id === 'friend-a')?.status).toBe('failed');
+    expect([...db.deliveries.values()].find((d) => d.friend_id === 'friend-b')?.status).toBe('sent');
+    expect(line.sends.map((send) => send.to)).toEqual(['U-b']);
+  });
+
+  it('keeps retryable LINE failures uncertain and stops the invocation', async () => {
+    const broadcast = makeBroadcast({
+      status: 'sending',
+      segment_conditions: JSON.stringify({
+        operator: 'AND',
+        rules: [{ type: 'is_following', value: true }],
+      }),
+    });
+    const db = new FakeD1(broadcast, [
+      { id: 'friend-a', line_user_id: 'U-a', line_account_id: ACCOUNT_A, is_following: 1, tag_id: 'tag-1' },
+      { id: 'friend-b', line_user_id: 'U-b', line_account_id: ACCOUNT_A, is_following: 1, tag_id: 'tag-2' },
+    ]);
+    const line = new FakeLineClient((to) => {
+      if (to === 'U-a') throw new LineApiError(503, 'request-id');
+    });
+
+    await processMaterializedQueue(db, line);
+
+    expect([...db.deliveries.values()].find((d) => d.friend_id === 'friend-a')?.status).toBe('uncertain');
+    expect([...db.deliveries.values()].find((d) => d.friend_id === 'friend-b')?.status).toBe('pending');
+    expect(line.sends).toHaveLength(0);
+  });
+
+  it('rechecks the 24-hour boundary atomically immediately before each send', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-07-27T00:00:00.000Z'));
+    const broadcast = makeBroadcast({
+      status: 'sending',
+      segment_conditions: JSON.stringify({
+        operator: 'AND',
+        rules: [{ type: 'is_following', value: true }],
+      }),
+    });
+    const friends: FriendRow[] = [
+      { id: 'friend-a', line_user_id: 'U-a', line_account_id: ACCOUNT_A, is_following: 1, tag_id: 'tag-1' },
+      { id: 'friend-b', line_user_id: 'U-b', line_account_id: ACCOUNT_A, is_following: 1, tag_id: 'tag-2' },
+    ];
+    const db = new FakeD1(broadcast, friends);
+    for (const friend of friends) {
+      db.deliveries.set(`${broadcast.id}:${friend.id}`, {
+        id: `delivery-${friend.id}`,
+        broadcast_id: broadcast.id,
+        friend_id: friend.id,
+        line_account_id: ACCOUNT_A,
+        status: 'uncertain',
+        attempt_count: 1,
+        retry_key: crypto.randomUUID(),
+        retry_key_created_at: '2026-07-26T00:01:00.000Z',
+        first_attempted_at: '2026-07-26T00:01:00.000Z',
+        last_error: null,
+      });
+    }
+    const line = new FakeLineClient((to) => {
+      if (to === 'U-a') {
+        vi.setSystemTime(new Date('2026-07-27T00:02:00.000Z'));
+      }
+    });
+
+    await processMaterializedQueue(db, line);
+
+    expect(line.sends.map((send) => send.to)).toEqual(['U-a']);
+    expect(db.deliveries.get(`${broadcast.id}:friend-b`)?.status).toBe('manual_review');
+  });
+
+  it('fences an old Worker after lease recovery and writes one sent log', async () => {
+    const broadcast = makeBroadcast({
+      status: 'sending',
+      segment_conditions: JSON.stringify({
+        operator: 'AND',
+        rules: [{ type: 'is_following', value: true }],
+      }),
+    });
+    const db = new FakeD1(broadcast, [
+      { id: 'friend-a', line_user_id: 'U-a', line_account_id: ACCOUNT_A, is_following: 1, tag_id: 'tag-1' },
+    ]);
+    const secondLine = new FakeLineClient();
+    let recovered = false;
+    const firstLine = new FakeLineClient(async () => {
+      if (recovered) return;
+      recovered = true;
+      const raw = broadcast as unknown as Record<string, unknown>;
+      raw.queue_locked_at = null;
+      raw.queue_lease_token = null;
+      await processQueuedBroadcasts(asD1(db), asLine(secondLine));
+    });
+
+    await processMaterializedQueue(db, firstLine);
+
+    expect(firstLine.sends).toHaveLength(1);
+    expect(secondLine.sends).toHaveLength(1);
+    expect(db.messageLog).toEqual(['friend-a']);
+    expect(broadcast.success_count).toBe(1);
+  });
+
+  it('materializes a large audience once in a bounded invocation before sending', async () => {
+    const broadcast = makeBroadcast({
+      status: 'sending',
+      segment_conditions: JSON.stringify({
+        operator: 'AND',
+        rules: [{ type: 'is_following', value: true }],
+      }),
+    });
+    const friends = Array.from({ length: 60 }, (_, index) => ({
+      id: `friend-${String(index).padStart(3, '0')}`,
+      line_user_id: `U-${index}`,
+      line_account_id: ACCOUNT_A,
+      is_following: 1,
+      tag_id: 'tag-1',
+    }));
+    const db = new FakeD1(broadcast, friends);
+    const line = new FakeLineClient();
+
+    await processQueuedBroadcasts(asD1(db), asLine(line));
+
+    expect(db.deliveries.size).toBeGreaterThan(0);
+    expect(db.deliveries.size).toBeLessThanOrEqual(25);
+    expect(db.boundSql.length).toBeLessThanOrEqual(35);
+    expect(line.sends).toHaveLength(0);
+    expect(broadcast.status).toBe('sending');
+
+    let previousQueryCount = db.boundSql.length;
+    await processQueuedBroadcasts(asD1(db), asLine(line));
+    expect(db.deliveries.size).toBe(50);
+    expect(db.boundSql.length - previousQueryCount).toBeLessThanOrEqual(35);
+    expect(line.sends).toHaveLength(0);
+
+    previousQueryCount = db.boundSql.length;
+    await processQueuedBroadcasts(asD1(db), asLine(line));
+    expect(db.deliveries.size).toBe(60);
+    expect(db.boundSql.length - previousQueryCount).toBeLessThanOrEqual(35);
+    expect(line.sends).toHaveLength(0);
+
+    previousQueryCount = db.boundSql.length;
+    await processQueuedBroadcasts(asD1(db), asLine(line));
+    expect(line.sends).toHaveLength(8);
+    expect(db.boundSql.length - previousQueryCount).toBeLessThanOrEqual(45);
+  });
+
+  it('keeps all-audience delivery on the LINE broadcast API', async () => {
+    const broadcast = makeBroadcast({
+      target_type: 'all',
+      target_tag_id: null,
+      line_account_id: null,
+    });
+    const db = new FakeD1(broadcast, []);
+    const line = new FakeLineClient();
+
+    await processBroadcastSend(asD1(db), asLine(line), broadcast.id);
+
+    expect(line.broadcastCalls).toBe(1);
+    expect(line.sends).toHaveLength(0);
+    expect(db.deliveries.size).toBe(0);
   });
 });

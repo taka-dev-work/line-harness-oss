@@ -73,4 +73,53 @@ describe('LineClient retry keys', () => {
       retryAccepted: true,
     });
   });
+
+  it('throws an unrelated retry-key 409 without an accepted request id', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ message: 'conflict-secret' }), {
+          status: 409,
+          statusText: 'Conflict',
+          headers: { 'content-type': 'application/json' },
+        }),
+      ),
+    );
+
+    const client = new LineClient('token');
+    const error = await client
+      .pushMessage('U-account-a', [{ type: 'text', text: 'hello' }], RETRY_KEY)
+      .catch((caught: unknown) => caught);
+
+    expect(error).toMatchObject({ status: 409, retryable: false });
+    expect(String(error)).not.toContain('conflict-secret');
+  });
+
+  it.each([
+    { status: 400, retryable: false },
+    { status: 429, retryable: true },
+    { status: 503, retryable: true },
+  ])(
+    'classifies LINE $status without leaking the response body',
+    async ({ status, retryable }) => {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValue(
+          new Response('channel-access-token=secret', {
+            status,
+            statusText: 'Request failed',
+          }),
+        ),
+      );
+
+      const client = new LineClient('token');
+      const error = await client
+        .pushMessage('U-account-a', [{ type: 'text', text: 'hello' }], RETRY_KEY)
+        .catch((caught: unknown) => caught);
+
+      expect(error).toMatchObject({ status, retryable });
+      expect(String(error)).not.toContain('channel-access-token');
+      expect(String(error)).not.toContain('secret');
+    },
+  );
 });

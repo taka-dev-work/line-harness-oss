@@ -5,7 +5,6 @@ import {
   createBroadcast,
   updateBroadcast,
   deleteBroadcast,
-  getBroadcastAudienceByTag,
 } from '@line-crm/db';
 import type { Broadcast as DbBroadcast, BroadcastMessageType, BroadcastTargetType } from '@line-crm/db';
 import { LineClient } from '@line-crm/line-sdk';
@@ -180,7 +179,7 @@ broadcasts.delete('/api/broadcasts/:id', async (c) => {
   }
 });
 
-// POST /api/broadcasts/:id/send - send now (tag配信で500人超はキュー方式)
+// POST /api/broadcasts/:id/send - send now
 broadcasts.post('/api/broadcasts/:id/send', async (c) => {
   try {
     const id = c.req.param('id');
@@ -194,7 +193,7 @@ broadcasts.post('/api/broadcasts/:id/send', async (c) => {
       return c.json({ success: false, error: 'Broadcast is already sent or sending' }, 400);
     }
 
-    // target_type='tag' で対象が多い場合はキュー方式
+    // Targeted sends always use the bounded durable queue.
     if (existing.target_type === 'tag' && existing.target_tag_id) {
       const accountId = existing.line_account_id;
       if (!accountId) {
@@ -203,25 +202,21 @@ broadcasts.post('/api/broadcasts/:id/send', async (c) => {
           400,
         );
       }
-      const friends = await getBroadcastAudienceByTag(
-        c.env.DB,
-        existing.target_tag_id,
-        accountId,
-      );
-      const followingCount = friends.length;
-
-      if (followingCount > 500) {
-        // Set segment_conditions to a marker so getQueuedBroadcasts() can find it
-        const tagMarker = JSON.stringify({ operator: 'AND', rules: [{ type: 'tag_exists', value: existing.target_tag_id }] });
-        await c.env.DB.prepare(
-          `UPDATE broadcasts SET status = 'sending', batch_offset = 0, queue_locked_at = NULL, segment_conditions = ? WHERE id = ?`
-        ).bind(tagMarker, id).run();
-        const result = await getBroadcastById(c.env.DB, id);
-        return c.json({ success: true, data: result ? serializeBroadcast(result) : null, queued: true, message: 'Broadcast queued for batch processing by Cron' }, 202);
-      }
+      const tagMarker = JSON.stringify({ operator: 'AND', rules: [{ type: 'tag_exists', value: existing.target_tag_id }] });
+      await c.env.DB.prepare(
+        `UPDATE broadcasts
+         SET status = 'sending', batch_offset = 0,
+             queue_locked_at = NULL, queue_lease_token = NULL,
+             audience_cursor = NULL, audience_materialized_at = NULL,
+             total_count = 0, success_count = 0,
+             segment_conditions = ?
+         WHERE id = ?`,
+      ).bind(tagMarker, id).run();
+      const result = await getBroadcastById(c.env.DB, id);
+      return c.json({ success: true, data: result ? serializeBroadcast(result) : null, queued: true, message: 'Broadcast queued for batch processing by Cron' }, 202);
     }
 
-    // 500人以下またはtarget_type='all'は即時送信
+    // All-audience sends stay on LINE's broadcast API.
     let accessToken = c.env.LINE_CHANNEL_ACCESS_TOKEN;
     const broadcastAccountId = (existing as unknown as Record<string, unknown>).line_account_id;
     if (broadcastAccountId) {
@@ -265,7 +260,13 @@ broadcasts.post('/api/broadcasts/:id/send-segment', async (c) => {
 
     // セグメント配信は常にキュー方式（タイムアウト防止）
     await c.env.DB.prepare(
-      `UPDATE broadcasts SET status = 'sending', batch_offset = 0, queue_locked_at = NULL, segment_conditions = ? WHERE id = ?`
+      `UPDATE broadcasts
+       SET status = 'sending', batch_offset = 0,
+           queue_locked_at = NULL, queue_lease_token = NULL,
+           audience_cursor = NULL, audience_materialized_at = NULL,
+           total_count = 0, success_count = 0,
+           segment_conditions = ?
+       WHERE id = ?`,
     ).bind(JSON.stringify(body.conditions), id).run();
 
     const result = await getBroadcastById(c.env.DB, id);

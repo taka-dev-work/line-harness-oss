@@ -19,6 +19,9 @@ export interface Broadcast {
   batch_offset?: number;
   segment_conditions?: string | null;
   queue_locked_at?: string | null;
+  queue_lease_token?: string | null;
+  audience_cursor?: string | null;
+  audience_materialized_at?: string | null;
   created_at: string;
 }
 
@@ -46,6 +49,7 @@ export interface BroadcastDelivery {
   retry_key_created_at: string;
   first_attempted_at: string | null;
   last_error: string | null;
+  claim_token: string | null;
 }
 
 export async function getBroadcasts(db: D1Database, accountId?: string): Promise<Broadcast[]> {
@@ -321,9 +325,11 @@ export async function getQueuedBroadcasts(db: D1Database): Promise<Broadcast[]> 
        WHERE status = 'sending'
          AND batch_offset >= 0
          AND queue_locked_at IS NULL
+         AND queue_lease_token IS NULL
          AND sent_at IS NULL
          AND segment_conditions IS NOT NULL
-       ORDER BY created_at ASC`,
+       ORDER BY created_at ASC
+       LIMIT 1`,
     )
     .all<Broadcast>();
   return result.results;
@@ -333,6 +339,8 @@ export async function getBroadcastAudienceByTag(
   db: D1Database,
   tagId: string,
   lineAccountId: string,
+  afterFriendId = '',
+  limit = 25,
 ): Promise<BroadcastAudienceFriend[]> {
   const result = await db
     .prepare(
@@ -342,9 +350,11 @@ export async function getBroadcastAudienceByTag(
        WHERE f.line_account_id = ?
          AND ft.tag_id = ?
          AND f.is_following = 1
-       ORDER BY f.created_at ASC, f.id ASC`,
+         AND f.id > ?
+       ORDER BY f.id ASC
+       LIMIT ?`,
     )
-    .bind(lineAccountId, tagId)
+    .bind(lineAccountId, tagId, afterFriendId, limit)
     .all<BroadcastAudienceFriend>();
   return result.results ?? [];
 }
@@ -382,31 +392,58 @@ export async function materializeBroadcastDeliveries(
   );
 }
 
-export async function expireBroadcastDeliveryRetryKeys(
+export async function acquireBroadcastQueueLease(
   db: D1Database,
   broadcastId: string,
+  batchOffset: number,
+  leaseToken: string,
   now = jstNow(),
-): Promise<void> {
-  await db
+): Promise<boolean> {
+  const result = await db
     .prepare(
-      `UPDATE broadcast_deliveries
-       SET status = 'manual_review',
-           last_error = 'LINE retry key expired after 24 hours; manual review required',
-           updated_at = ?
-       WHERE broadcast_id = ?
-         AND status IN ('failed', 'uncertain')
-         AND first_attempted_at IS NOT NULL
-         AND julianday(?) - julianday(first_attempted_at) >= 1`,
+      `UPDATE broadcasts
+       SET queue_locked_at = ?, queue_lease_token = ?
+       WHERE id = ?
+         AND batch_offset = ?
+         AND queue_locked_at IS NULL
+         AND queue_lease_token IS NULL`,
     )
-    .bind(now, broadcastId, now)
+    .bind(now, leaseToken, broadcastId, batchOffset)
     .run();
+  return (result.meta.changes ?? 0) > 0;
+}
+
+export async function saveBroadcastAudiencePage(
+  db: D1Database,
+  broadcastId: string,
+  leaseToken: string,
+  cursor: string,
+  complete: boolean,
+  now = jstNow(),
+): Promise<boolean> {
+  const result = await db
+    .prepare(
+      `UPDATE broadcasts
+       SET audience_cursor = ?,
+           audience_materialized_at = CASE WHEN ? = 1 THEN ? ELSE NULL END,
+           total_count = (
+             SELECT COUNT(*) FROM broadcast_deliveries
+             WHERE broadcast_id = broadcasts.id
+           ),
+           queue_locked_at = NULL,
+           queue_lease_token = NULL
+       WHERE id = ? AND queue_lease_token = ?`,
+    )
+    .bind(cursor, complete ? 1 : 0, now, broadcastId, leaseToken)
+    .run();
+  return (result.meta.changes ?? 0) > 0;
 }
 
 export async function getRetryableBroadcastDeliveries(
   db: D1Database,
   broadcastId: string,
   lineAccountId: string,
-  now = jstNow(),
+  limit = 8,
 ): Promise<BroadcastDelivery[]> {
   const result = await db
     .prepare(
@@ -417,57 +454,108 @@ export async function getRetryableBroadcastDeliveries(
         AND f.line_account_id = d.line_account_id
        WHERE d.broadcast_id = ?
          AND d.line_account_id = ?
-         AND d.status IN ('pending', 'failed', 'uncertain')
-         AND (
-           d.first_attempted_at IS NULL
-           OR julianday(?) - julianday(d.first_attempted_at) < 1
-         )
-       ORDER BY d.created_at ASC, d.id ASC`,
+         AND d.status IN ('pending', 'uncertain')
+       ORDER BY d.created_at ASC, d.id ASC
+       LIMIT ?`,
     )
-    .bind(broadcastId, lineAccountId, now)
+    .bind(broadcastId, lineAccountId, limit)
     .all<BroadcastDelivery>();
   return result.results ?? [];
 }
 
-export async function markBroadcastDeliveryAttempt(
+export async function claimBroadcastDelivery(
   db: D1Database,
   deliveryId: string,
+  leaseToken: string,
   now = jstNow(),
-): Promise<void> {
-  await db
+): Promise<BroadcastDelivery | null> {
+  return db
     .prepare(
       `UPDATE broadcast_deliveries
-       SET status = 'uncertain',
-           attempt_count = attempt_count + 1,
-           first_attempted_at = COALESCE(first_attempted_at, ?),
-           last_attempted_at = ?,
+       SET status = CASE
+             WHEN first_attempted_at IS NOT NULL
+              AND julianday(?) - julianday(first_attempted_at) >= 1
+             THEN 'manual_review'
+             ELSE 'uncertain'
+           END,
+           attempt_count = CASE
+             WHEN first_attempted_at IS NOT NULL
+              AND julianday(?) - julianday(first_attempted_at) >= 1
+             THEN attempt_count
+             ELSE attempt_count + 1
+           END,
+           first_attempted_at = CASE
+             WHEN first_attempted_at IS NOT NULL
+              AND julianday(?) - julianday(first_attempted_at) >= 1
+             THEN first_attempted_at
+             ELSE COALESCE(first_attempted_at, ?)
+           END,
+           last_attempted_at = CASE
+             WHEN first_attempted_at IS NOT NULL
+              AND julianday(?) - julianday(first_attempted_at) >= 1
+             THEN last_attempted_at
+             ELSE ?
+           END,
+           claim_token = CASE
+             WHEN first_attempted_at IS NOT NULL
+              AND julianday(?) - julianday(first_attempted_at) >= 1
+             THEN NULL
+             ELSE ?
+           END,
+           last_error = CASE
+             WHEN first_attempted_at IS NOT NULL
+              AND julianday(?) - julianday(first_attempted_at) >= 1
+             THEN 'LINE retry key expired after 24 hours; manual review required'
+             ELSE last_error
+           END,
            updated_at = ?
-       WHERE id = ?`,
+       WHERE id = ?
+         AND status IN ('pending', 'uncertain')
+         AND EXISTS (
+           SELECT 1 FROM broadcasts b
+           WHERE b.id = broadcast_deliveries.broadcast_id
+             AND b.queue_lease_token = ?
+         )
+       RETURNING *`,
     )
-    .bind(now, now, now, deliveryId)
-    .run();
+    .bind(now, now, now, now, now, now, now, leaseToken, now, now, deliveryId, leaseToken)
+    .first<BroadcastDelivery>();
 }
 
 export async function markBroadcastDeliverySent(
   db: D1Database,
   delivery: BroadcastDelivery,
   broadcast: Broadcast,
+  leaseToken: string,
   now = jstNow(),
-): Promise<void> {
-  await db.batch([
+): Promise<boolean> {
+  const results = await db.batch([
     db
       .prepare(
         `UPDATE broadcast_deliveries
          SET status = 'sent', sent_at = ?, last_error = NULL, updated_at = ?
-         WHERE id = ?`,
+         WHERE id = ?
+           AND claim_token = ?
+           AND EXISTS (
+             SELECT 1 FROM broadcasts b
+             WHERE b.id = broadcast_deliveries.broadcast_id
+               AND b.queue_lease_token = ?
+           )`,
       )
-      .bind(now, now, delivery.id),
+      .bind(now, now, delivery.id, leaseToken, leaseToken),
     db
       .prepare(
         `INSERT INTO messages_log
            (id, friend_id, direction, message_type, content, broadcast_id,
-            scenario_step_id, source, created_at)
-         VALUES (?, ?, 'outgoing', ?, ?, ?, NULL, 'broadcast', ?)`,
+            scenario_step_id, source, broadcast_delivery_id, created_at)
+         SELECT ?, ?, 'outgoing', ?, ?, ?, NULL, 'broadcast', ?, ?
+         FROM broadcast_deliveries d
+         INNER JOIN broadcasts b ON b.id = d.broadcast_id
+         WHERE d.id = ?
+           AND d.status = 'sent'
+           AND d.claim_token = ?
+           AND b.queue_lease_token = ?
+         ON CONFLICT(broadcast_delivery_id) DO NOTHING`,
       )
       .bind(
         crypto.randomUUID(),
@@ -475,9 +563,61 @@ export async function markBroadcastDeliverySent(
         broadcast.message_type,
         broadcast.message_content,
         broadcast.id,
+        delivery.id,
         now,
+        delivery.id,
+        leaseToken,
+        leaseToken,
       ),
   ]);
+  return (results[0]?.meta.changes ?? 0) > 0;
+}
+
+export async function markBroadcastDeliveryFailed(
+  db: D1Database,
+  deliveryId: string,
+  leaseToken: string,
+  lastError: string,
+  now = jstNow(),
+): Promise<boolean> {
+  const result = await db
+    .prepare(
+      `UPDATE broadcast_deliveries
+       SET status = 'failed', last_error = ?, claim_token = NULL, updated_at = ?
+       WHERE id = ?
+         AND claim_token = ?
+         AND EXISTS (
+           SELECT 1 FROM broadcasts b
+           WHERE b.id = broadcast_deliveries.broadcast_id
+             AND b.queue_lease_token = ?
+         )`,
+    )
+    .bind(lastError, now, deliveryId, leaseToken, leaseToken)
+    .run();
+  return (result.meta.changes ?? 0) > 0;
+}
+
+export async function markBroadcastDeliveryUncertain(
+  db: D1Database,
+  deliveryId: string,
+  leaseToken: string,
+  lastError: string,
+  now = jstNow(),
+): Promise<boolean> {
+  const result = await db
+    .prepare(
+      `UPDATE broadcast_deliveries
+       SET last_error = ?, updated_at = ?
+       WHERE id = ? AND claim_token = ?
+         AND EXISTS (
+           SELECT 1 FROM broadcasts b
+           WHERE b.id = broadcast_deliveries.broadcast_id
+             AND b.queue_lease_token = ?
+         )`,
+    )
+    .bind(lastError, now, deliveryId, leaseToken, leaseToken)
+    .run();
+  return (result.meta.changes ?? 0) > 0;
 }
 
 export async function getBroadcastDeliveryCounts(
@@ -487,12 +627,16 @@ export async function getBroadcastDeliveryCounts(
   totalCount: number;
   sentCount: number;
   manualReviewCount: number;
+  failedCount: number;
+  remainingCount: number;
 }> {
   const row = await db
     .prepare(
       `SELECT COUNT(*) AS total_count,
               SUM(CASE WHEN status = 'sent' THEN 1 ELSE 0 END) AS sent_count,
               SUM(CASE WHEN status = 'manual_review' THEN 1 ELSE 0 END) AS manual_review_count
+              ,SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) AS failed_count
+              ,SUM(CASE WHEN status IN ('pending', 'uncertain') THEN 1 ELSE 0 END) AS remaining_count
        FROM broadcast_deliveries
        WHERE broadcast_id = ?`,
     )
@@ -501,11 +645,15 @@ export async function getBroadcastDeliveryCounts(
       total_count: number;
       sent_count: number | null;
       manual_review_count: number | null;
+      failed_count: number | null;
+      remaining_count: number | null;
     }>();
   return {
     totalCount: row?.total_count ?? 0,
     sentCount: row?.sent_count ?? 0,
     manualReviewCount: row?.manual_review_count ?? 0,
+    failedCount: row?.failed_count ?? 0,
+    remainingCount: row?.remaining_count ?? 0,
   };
 }
 
@@ -525,12 +673,13 @@ export async function recoverStalledBroadcasts(db: D1Database): Promise<void> {
               WHERE d.broadcast_id = broadcasts.id AND d.status = 'sent'),
              0
            ),
-           queue_locked_at = NULL
+           queue_locked_at = NULL,
+           queue_lease_token = NULL
        WHERE status = 'sending'
          AND sent_at IS NULL
          AND segment_conditions IS NOT NULL
          AND queue_locked_at IS NOT NULL
-         AND julianday('now', '+9 hours') - julianday(queue_locked_at) > 0.021`,
+         AND julianday('now') - julianday(queue_locked_at) > 0.021`,
     )
     .run();
 }
@@ -538,26 +687,71 @@ export async function recoverStalledBroadcasts(db: D1Database): Promise<void> {
 export async function updateBroadcastBatchProgress(
   db: D1Database,
   id: string,
-  batchOffset: number,
-  additionalSuccess: number,
+  leaseToken: string,
   releaseLock = false,
-): Promise<void> {
-  await db
+  now = jstNow(),
+): Promise<boolean> {
+  const result = await db
     .prepare(
       `UPDATE broadcasts
-       SET batch_offset = ?,
-           success_count = success_count + ?,
-           queue_locked_at = CASE WHEN ? = 1 THEN NULL ELSE ? END
-       WHERE id = ?`,
+       SET batch_offset = (
+             SELECT COUNT(*) FROM broadcast_deliveries
+             WHERE broadcast_id = broadcasts.id
+               AND status IN ('sent', 'failed', 'manual_review')
+           ),
+           success_count = (
+             SELECT COUNT(*) FROM broadcast_deliveries
+             WHERE broadcast_id = broadcasts.id AND status = 'sent'
+           ),
+           queue_locked_at = CASE WHEN ? = 1 THEN NULL ELSE ? END,
+           queue_lease_token = CASE WHEN ? = 1 THEN NULL ELSE queue_lease_token END
+       WHERE id = ? AND queue_lease_token = ?`,
     )
-    .bind(
-      batchOffset,
-      additionalSuccess,
-      releaseLock ? 1 : 0,
-      jstNow(),
-      id,
-    )
+    .bind(releaseLock ? 1 : 0, now, releaseLock ? 1 : 0, id, leaseToken)
     .run();
+  return (result.meta.changes ?? 0) > 0;
+}
+
+export async function completeBroadcastQueue(
+  db: D1Database,
+  id: string,
+  leaseToken: string,
+  aggregationUnit: string,
+  now = jstNow(),
+): Promise<boolean> {
+  const result = await db
+    .prepare(
+      `UPDATE broadcasts
+       SET status = 'sent',
+           sent_at = ?,
+           aggregation_unit = ?,
+           total_count = (
+             SELECT COUNT(*) FROM broadcast_deliveries
+             WHERE broadcast_id = broadcasts.id
+           ),
+           success_count = (
+             SELECT COUNT(*) FROM broadcast_deliveries
+             WHERE broadcast_id = broadcasts.id AND status = 'sent'
+           ),
+           batch_offset = (
+             SELECT COUNT(*) FROM broadcast_deliveries
+             WHERE broadcast_id = broadcasts.id
+               AND status IN ('sent', 'failed', 'manual_review')
+           ),
+           queue_locked_at = NULL,
+           queue_lease_token = NULL
+       WHERE id = ?
+         AND queue_lease_token = ?
+         AND audience_materialized_at IS NOT NULL
+         AND NOT EXISTS (
+           SELECT 1 FROM broadcast_deliveries
+           WHERE broadcast_id = broadcasts.id
+             AND status IN ('pending', 'uncertain')
+         )`,
+    )
+    .bind(now, aggregationUnit, id, leaseToken)
+    .run();
+  return (result.meta.changes ?? 0) > 0;
 }
 
 export interface BroadcastStatusCounts {

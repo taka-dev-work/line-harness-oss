@@ -16,6 +16,19 @@ interface RequestOptions {
   retryKey?: string;
 }
 
+export class LineApiError extends Error {
+  readonly retryable: boolean;
+
+  constructor(
+    readonly status: number,
+    readonly requestId: string | null,
+  ) {
+    super(`LINE API request failed with status ${status}`);
+    this.name = 'LineApiError';
+    this.retryable = status === 429 || status >= 500;
+  }
+}
+
 export class LineClient {
   constructor(private readonly channelAccessToken: string) {}
 
@@ -50,10 +63,11 @@ export class LineClient {
 
     const res = await fetch(url, options);
 
-    if (res.status === 409 && retryKey) {
+    const acceptedRequestId = res.headers.get('x-line-accepted-request-id');
+    if (res.status === 409 && retryKey && acceptedRequestId) {
       return {
         data: {
-          acceptedRequestId: res.headers.get('x-line-accepted-request-id'),
+          acceptedRequestId,
           retryAccepted: true,
         },
         headers: res.headers,
@@ -61,9 +75,9 @@ export class LineClient {
     }
 
     if (!res.ok) {
-      const text = await res.text().catch(() => '');
-      throw new Error(
-        `LINE API error: ${res.status} ${res.statusText} — ${text}`,
+      throw new LineApiError(
+        res.status,
+        res.headers.get('x-line-request-id'),
       );
     }
 
