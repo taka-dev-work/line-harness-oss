@@ -1,36 +1,25 @@
 import * as p from "@clack/prompts";
 import pc from "picocolors";
-import { existsSync, readFileSync } from "node:fs";
+import {
+  existsSync,
+  readFileSync,
+  unlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { join } from "node:path";
 import { ensureAuth } from "../steps/auth.js";
-import { wrangler } from "../lib/wrangler.js";
+import {
+  loadInstallerConfig,
+  updateWranglerConfig,
+} from "../lib/config.js";
+import { setAccountId, wrangler } from "../lib/wrangler.js";
 import { execa } from "execa";
-
-interface SetupState {
-  projectName?: string;
-  workerName?: string;
-  adminUrl?: string;
-  [key: string]: unknown;
-}
-
-function loadState(repoDir: string): SetupState | null {
-  // Check for saved config from previous setup
-  const configPath = join(repoDir, ".line-harness-config.json");
-  if (existsSync(configPath)) {
-    try {
-      return JSON.parse(readFileSync(configPath, "utf-8"));
-    } catch {
-      // corrupt file
-    }
-  }
-  return null;
-}
 
 export async function runUpdate(repoDir: string): Promise<void> {
   p.intro(pc.bgCyan(pc.black(" LINE Harness アップデート ")));
 
   // Load saved config or ask for project name
-  const savedState = loadState(repoDir);
+  const savedState = loadInstallerConfig(repoDir);
   let projectName: string;
 
   if (savedState?.projectName) {
@@ -50,6 +39,9 @@ export async function runUpdate(repoDir: string): Promise<void> {
   }
 
   await ensureAuth();
+  if (savedState?.accountId) {
+    setAccountId(savedState.accountId);
+  }
 
   const s = p.spinner();
 
@@ -57,7 +49,13 @@ export async function runUpdate(repoDir: string): Promise<void> {
   s.start("マイグレーション確認中...");
   try {
     await wrangler(
-      ["d1", "migrations", "apply", projectName, "--remote"],
+      [
+        "d1",
+        "migrations",
+        "apply",
+        savedState?.d1DatabaseName ?? projectName,
+        "--remote",
+      ],
       { cwd: join(repoDir, "packages/db") },
     );
     s.stop("マイグレーション完了");
@@ -67,13 +65,38 @@ export async function runUpdate(repoDir: string): Promise<void> {
 
   // Redeploy Worker
   s.start("Worker 再デプロイ中...");
-  await wrangler(["deploy", "--name", projectName], { cwd: join(repoDir, "apps/worker") });
+  const workerDir = join(repoDir, "apps/worker");
+  const tomlPath = join(workerDir, "wrangler.toml");
+  const originalToml = existsSync(tomlPath)
+    ? readFileSync(tomlPath, "utf8")
+    : null;
+  const deployToml = updateWranglerConfig(originalToml ?? "", {
+    name: savedState?.workerName ?? projectName,
+    accountId: savedState?.accountId,
+    d1DatabaseName: savedState?.d1DatabaseName,
+    d1DatabaseId: savedState?.d1DatabaseId,
+    r2BucketName: savedState?.r2BucketName,
+    assetsDirectory: "dist/client",
+  });
+  writeFileSync(tomlPath, deployToml);
+  try {
+    await wrangler(
+      ["deploy", "--name", savedState?.workerName ?? projectName],
+      { cwd: workerDir },
+    );
+  } finally {
+    if (originalToml === null) {
+      unlinkSync(tomlPath);
+    } else {
+      writeFileSync(tomlPath, originalToml);
+    }
+  }
   s.stop("Worker 再デプロイ完了");
 
   // Rebuild and redeploy Admin UI
-  const adminProjectName = savedState?.adminUrl
+  const adminProjectName = savedState?.adminProjectName ?? (savedState?.adminUrl
     ? new URL(savedState.adminUrl as string).hostname.replace(".pages.dev", "")
-    : `${projectName}-admin`;
+    : `${projectName}-admin`);
   s.start("Admin UI 再デプロイ中...");
   const webDir = join(repoDir, "apps/web");
   await execa("pnpm", ["run", "build"], { cwd: webDir });

@@ -8,6 +8,8 @@ dist/
 *.log
 .DS_Store
 .mcp.json
+.line-harness-setup.json
+.line-harness-config.json
 .claude/
 *.toml.bak
 .env.production

@@ -1,6 +1,6 @@
 import * as p from "@clack/prompts";
 import pc from "picocolors";
-import { readFileSync, writeFileSync, existsSync, rmSync } from "node:fs";
+import { writeFileSync, existsSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { randomUUID } from "node:crypto";
@@ -14,38 +14,19 @@ import { setSecrets } from "../steps/secrets.js";
 import { generateMcpConfig } from "../steps/mcp-config.js";
 import { generateApiKey } from "../lib/crypto.js";
 import {
+  INSTALLER_CONFIG_FILE,
+  SETUP_STATE_FILE,
+  loadSetupState,
+  saveSetupState,
+  type SetupState,
+} from "../lib/config.js";
+import {
   getAccountIds,
   setAccountId,
   wrangler,
   WranglerError,
   type CloudflareAccount,
 } from "../lib/wrangler.js";
-
-interface SetupState {
-  projectName?: string;
-  lineChannelId?: string;
-  lineChannelAccessToken?: string;
-  lineChannelSecret?: string;
-  lineLoginChannelId?: string;
-  liffId?: string;
-  apiKey?: string;
-  d1DatabaseId?: string;
-  d1DatabaseName?: string;
-  r2BucketName?: string;
-  workerName?: string;
-  accountId?: string;
-  botBasicId?: string;
-  workerUrl?: string;
-  adminUrl?: string;
-  /**
-   * Pristine apps/worker/wrangler.toml content captured before we started
-   * substituting account/database IDs. Restored on exit so the cloned repo
-   * stays git-clean. Persisted in state.json so SIGINT mid-run + later
-   * `npx create-line-harness` resume still has the right baseline.
-   */
-  originalWranglerToml?: string;
-  completedSteps: string[];
-}
 
 // Steps whose result lives in the previous CF account and must be redone if the user switches.
 const ACCOUNT_DEPENDENT_STEPS = [
@@ -59,81 +40,15 @@ const ACCOUNT_DEPENDENT_STEPS = [
 ];
 
 function getStatePath(repoDir: string): string {
-  return join(repoDir, ".line-harness-setup.json");
-}
-
-function loadState(repoDir: string): SetupState {
-  const path = getStatePath(repoDir);
-  if (existsSync(path)) {
-    try {
-      return JSON.parse(readFileSync(path, "utf-8"));
-    } catch {
-      // corrupt file, start fresh
-    }
-  }
-  return { completedSteps: [] };
+  return join(repoDir, SETUP_STATE_FILE);
 }
 
 function saveState(repoDir: string, state: SetupState): void {
-  writeFileSync(getStatePath(repoDir), JSON.stringify(state, null, 2) + "\n");
+  saveSetupState(repoDir, state);
 }
 
 function isDone(state: SetupState, step: string): boolean {
   return state.completedSteps.includes(step);
-}
-
-/**
- * The OSS-synced wrangler.toml ships with placeholders like
- * `YOUR_DEV_ACCOUNT_ID` / `YOUR_DEV_D1_DATABASE_ID` so it never leaks the
- * upstream maintainer's IDs. Wrangler reads those placeholders verbatim and
- * fails routing (`Could not route to /accounts/YOUR_DEV_ACCOUNT_ID/...`),
- * which used to surface as "no such table: line_accounts" two steps later.
- *
- * We patch the file in-place (so `wrangler` resolves `main = "src/index.ts"`
- * and `assets.directory` correctly relative to apps/worker/) and capture the
- * pristine content into the setup state so it can be restored at the end of
- * the run — leaving the tracked file dirty would break a future
- * `git pull --ff-only` on `~/.line-harness`.
- *
- * Replaces EVERY account_id / database_id literal — covers both placeholders
- * and real IDs left over from a prior install or a different Cloudflare
- * account. Idempotent: safe to call multiple times.
- */
-function applyPatchedConfig(
-  state: SetupState,
-  repoDir: string,
-  accountId: string,
-  databaseId?: string,
-): void {
-  const tomlPath = join(repoDir, "apps/worker/wrangler.toml");
-  if (!existsSync(tomlPath)) return;
-  // Capture the pristine file the FIRST time we patch (before our
-  // substitution touches it), so we can restore it on exit and not pollute
-  // future `git pull --ff-only` runs.
-  if (state.originalWranglerToml === undefined) {
-    state.originalWranglerToml = readFileSync(tomlPath, "utf-8");
-  }
-  let content = state.originalWranglerToml;
-  content = content.replace(/account_id\s*=\s*"[^"]*"/g, `account_id = "${accountId}"`);
-  if (databaseId) {
-    content = content.replace(/database_id\s*=\s*"[^"]*"/g, `database_id = "${databaseId}"`);
-  }
-  writeFileSync(tomlPath, content);
-}
-
-/**
- * Restore the original wrangler.toml so the cloned repo is git-clean again.
- * Called from the top-level try/finally so it runs on success, error, and
- * SIGINT alike.
- */
-function restoreWranglerToml(state: SetupState, repoDir: string): void {
-  if (state.originalWranglerToml === undefined) return;
-  const tomlPath = join(repoDir, "apps/worker/wrangler.toml");
-  try {
-    writeFileSync(tomlPath, state.originalWranglerToml);
-  } catch {
-    // Best effort — user can `git -C ~/.line-harness checkout apps/worker/wrangler.toml`.
-  }
 }
 
 function markDone(state: SetupState, step: string): void {
@@ -276,7 +191,7 @@ async function verifyAccount(
 export async function runSetup(repoDir: string): Promise<void> {
   p.intro(pc.bgCyan(pc.black(" LINE Harness セットアップ ")));
 
-  const state = loadState(repoDir);
+  const state = loadSetupState(repoDir);
 
   if (state.completedSteps.length > 0) {
     p.log.info(
@@ -284,44 +199,9 @@ export async function runSetup(repoDir: string): Promise<void> {
     );
   }
 
-  // Resume hygiene: a previous (possibly aborted) run may have left
-  // wrangler.toml patched and cached the now-stale baseline in state.json.
-  // Roll the file back to that baseline first, then forget it — the next
-  // applyPatchedConfig() will re-capture the current (possibly git-pulled)
-  // version. Without this, resuming overwrites a freshly-pulled toml with
-  // the stale snapshot.
-  if (state.originalWranglerToml !== undefined) {
-    restoreWranglerToml(state, repoDir);
-    state.originalWranglerToml = undefined;
-    saveState(repoDir, state);
-  }
-
-  // process.exit() skips the finally block in Node, and clack's p.cancel()
-  // inside runSetupInner can call it too. Centralise restore + persist into
-  // one helper so every exit path runs it before exiting.
-  // Critically: also clear originalWranglerToml in state so a future rerun
-  // (after `git pull` may have updated apps/worker/wrangler.toml) does NOT
-  // restore yesterday's snapshot over today's freshly-pulled file.
-  const cleanup = (): void => {
-    restoreWranglerToml(state, repoDir);
-    state.originalWranglerToml = undefined;
-    saveState(repoDir, state);
-  };
-
-  // Best-effort restore on SIGINT (Ctrl-C). Without this the user's repo
-  // is left dirty and `ensureRepo()` next time can't ff-only.
-  const onSignal = (sig: NodeJS.Signals) => {
-    cleanup();
-    process.exit(sig === "SIGINT" ? 130 : 143);
-  };
-  process.once("SIGINT", onSignal);
-  process.once("SIGTERM", onSignal);
-
   try {
     await runSetupInner(state, repoDir);
-    cleanup();
   } catch (error) {
-    cleanup();
     if (error instanceof WranglerError) {
       const help = error.getHelp();
       if (help) {
@@ -335,9 +215,6 @@ export async function runSetup(repoDir: string): Promise<void> {
       process.exit(1);
     }
     throw error;
-  } finally {
-    process.removeListener("SIGINT", onSignal);
-    process.removeListener("SIGTERM", onSignal);
   }
 }
 
@@ -363,11 +240,6 @@ async function runSetupInner(
   }
   // Pin all wrangler commands to this account
   setAccountId(state.accountId);
-  // Patch wrangler.toml's account_id placeholder immediately — d1/worker
-  // commands consult the toml file directly, and an unsubstituted
-  // `YOUR_DEV_ACCOUNT_ID` would 404 every API call.
-  applyPatchedConfig(state, repoDir, state.accountId);
-  saveState(repoDir, state);
 
   // Step 1: Cloudflare R2 billing setup
   if (!isDone(state, "r2billing")) {
@@ -417,18 +289,12 @@ async function runSetupInner(
     p.log.success(`プロジェクト名: ${state.projectName}`);
   }
 
-  // Step 4: Get LINE credentials (skip if already saved)
-  if (!isDone(state, "credentials")) {
-    const credentials = await promptLineCredentials();
-    state.lineChannelId = credentials.lineChannelId;
-    state.lineChannelAccessToken = credentials.lineChannelAccessToken;
-    state.lineChannelSecret = credentials.lineChannelSecret;
-    state.lineLoginChannelId = credentials.lineLoginChannelId;
-    markDone(state, "credentials");
-    saveState(repoDir, state);
-  } else {
-    p.log.success("LINE チャネル情報: 入力済み（スキップ）");
-  }
+  // Plaintext credentials live only for this process. Resumed setups ask for
+  // them again instead of recovering them from a local state file.
+  const credentials = await promptLineCredentials();
+  state.lineChannelId = credentials.lineChannelId;
+  state.lineLoginChannelId = credentials.lineLoginChannelId;
+  saveState(repoDir, state);
 
   // Step 5: Ask for LIFF ID (skip if already saved)
   if (!isDone(state, "liffId")) {
@@ -472,29 +338,14 @@ async function runSetupInner(
     p.log.success(`LIFF ID: 入力済み（${state.liffId}）`);
   }
 
-  // Step 6: Generate API key (skip if already generated)
-  if (!state.apiKey) {
-    state.apiKey = generateApiKey();
-    saveState(repoDir, state);
-  }
-
   // Step 7: Create D1 database + run migrations
   if (!isDone(state, "database")) {
     const { databaseId, databaseName } = await createDatabase(repoDir, state.projectName!);
     state.d1DatabaseId = databaseId;
     state.d1DatabaseName = databaseName;
-    // Now that the real D1 ID is known, finish patching wrangler.toml so
-    // that `wrangler deploy` / future `d1 execute --file` calls hit the
-    // correct database instead of the placeholder.
-    applyPatchedConfig(state, repoDir, state.accountId, databaseId);
     markDone(state, "database");
     saveState(repoDir, state);
   } else {
-    // Resumed install — wrangler.toml may have been re-cloned with
-    // placeholders, so patch it again with the cached IDs.
-    if (state.d1DatabaseId) {
-      applyPatchedConfig(state, repoDir, state.accountId, state.d1DatabaseId);
-    }
     p.log.success(`D1 データベース: 作成済み（${state.d1DatabaseId}）`);
   }
 
@@ -524,7 +375,9 @@ async function runSetupInner(
   if (!state.botBasicId) {
     try {
       const botRes = await fetch("https://api.line.me/v2/bot/info", {
-        headers: { Authorization: `Bearer ${state.lineChannelAccessToken}` },
+        headers: {
+          Authorization: `Bearer ${credentials.lineChannelAccessToken}`,
+        },
       });
       if (botRes.ok) {
         const bot = (await botRes.json()) as { basicId?: string };
@@ -540,7 +393,7 @@ async function runSetupInner(
   }
 
   // Step 10: Deploy Worker (includes LIFF build via @cloudflare/vite-plugin)
-  state.workerName = state.projectName!;
+  state.workerName ??= state.projectName!;
   if (!isDone(state, "worker")) {
     const { workerUrl } = await deployWorker({
       repoDir,
@@ -560,20 +413,15 @@ async function runSetupInner(
   }
 
   // Step 11: Set secrets
-  if (!isDone(state, "secrets")) {
-    await setSecrets({
-      workerName: state.workerName,
-      lineChannelAccessToken: state.lineChannelAccessToken!,
-      lineChannelSecret: state.lineChannelSecret!,
-      lineLoginChannelId: state.lineLoginChannelId!,
-      liffId: state.liffId!,
-      apiKey: state.apiKey!,
-    });
-    markDone(state, "secrets");
-    saveState(repoDir, state);
-  } else {
-    p.log.success("シークレット: 設定済み");
-  }
+  const apiKey = generateApiKey();
+  await setSecrets({
+    workerName: state.workerName,
+    lineChannelAccessToken: credentials.lineChannelAccessToken,
+    lineChannelSecret: credentials.lineChannelSecret,
+    lineLoginChannelId: state.lineLoginChannelId!,
+    liffId: state.liffId!,
+    apiKey,
+  });
 
   // Step 12: Register LINE account in DB.
   // We INSERT directly via `wrangler d1 execute` instead of POSTing to
@@ -607,7 +455,7 @@ async function runSetupInner(
       // the CLI working against older databases that resumed an old install.
       const insertSql = `
 INSERT INTO line_accounts (id, channel_id, name, channel_access_token, channel_secret, is_active, created_at, updated_at)
-VALUES (${q(id)}, ${q(state.lineChannelId!)}, ${q("LINE Harness")}, ${q(state.lineChannelAccessToken!)}, ${q(state.lineChannelSecret!)}, 1, ${q(jstNowStr)}, ${q(jstNowStr)})
+VALUES (${q(id)}, ${q(state.lineChannelId!)}, ${q("LINE Harness")}, ${q(credentials.lineChannelAccessToken)}, ${q(credentials.lineChannelSecret)}, 1, ${q(jstNowStr)}, ${q(jstNowStr)})
 ON CONFLICT(channel_id) DO UPDATE SET
   channel_access_token = excluded.channel_access_token,
   channel_secret = excluded.channel_secret,
@@ -673,15 +521,18 @@ ON CONFLICT(channel_id) DO UPDATE SET
   }
 
   // Step 13: Deploy Admin UI
-  // Use unique project names to avoid subdomain collision
-  const suffix = state.apiKey!.slice(0, 8);
-  const adminProjectName = `${state.projectName}-admin-${suffix}`;
+  if (!state.adminProjectName) {
+    state.adminProjectName = state.adminUrl
+      ? new URL(state.adminUrl).hostname.replace(".pages.dev", "")
+      : `${state.projectName}-admin-${randomUUID().slice(0, 8)}`;
+    saveState(repoDir, state);
+  }
   if (!isDone(state, "admin")) {
     const { adminUrl } = await deployAdmin({
       repoDir,
       workerUrl: state.workerUrl!,
-      apiKey: state.apiKey!,
-      projectName: adminProjectName,
+      apiKey,
+      projectName: state.adminProjectName,
     });
     state.adminUrl = adminUrl;
     markDone(state, "admin");
@@ -695,7 +546,7 @@ ON CONFLICT(channel_id) DO UPDATE SET
     message: "MCP 設定を .mcp.json に追加しますか？（Claude Code / Cursor 用）",
   });
   if (addMcp && !p.isCancel(addMcp)) {
-    generateMcpConfig({ workerUrl: state.workerUrl!, apiKey: state.apiKey! });
+    generateMcpConfig({ workerUrl: state.workerUrl!, apiKey });
   }
 
   // Step 15: Show completion screen
@@ -731,14 +582,14 @@ ON CONFLICT(channel_id) DO UPDATE SET
       `   ${pc.cyan(state.adminUrl!)}`,
       "",
       `${pc.bold("API Key:")}`,
-      `   ${pc.dim(state.apiKey!)}`,
+      `   ${pc.dim(apiKey)}`,
       `   → この値は再表示できません。安全な場所に保存してください`,
     ].join("\n"),
     "セットアップ完了！",
   );
 
   // Save config for future updates (separate from setup state)
-  const configPath = join(repoDir, ".line-harness-config.json");
+  const configPath = join(repoDir, INSTALLER_CONFIG_FILE);
   writeFileSync(
     configPath,
     JSON.stringify(
@@ -747,6 +598,7 @@ ON CONFLICT(channel_id) DO UPDATE SET
         workerName: state.workerName,
         workerUrl: state.workerUrl,
         adminUrl: state.adminUrl,
+        adminProjectName: state.adminProjectName,
         d1DatabaseName: state.d1DatabaseName,
         d1DatabaseId: state.d1DatabaseId,
         r2BucketName: state.r2BucketName,

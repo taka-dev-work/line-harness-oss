@@ -2,6 +2,7 @@ import * as p from "@clack/prompts";
 import { writeFileSync, existsSync, readFileSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
 import { execa } from "execa";
+import { updateWranglerConfig } from "../lib/config.js";
 import { wrangler, WranglerError } from "../lib/wrangler.js";
 
 const WORKERS_DEV_URL = /(https:\/\/[^\s]+\.workers\.dev)/;
@@ -33,34 +34,21 @@ export async function deployWorker(
     ? readFileSync(tomlPath, "utf-8")
     : null;
 
-  // Write deploy wrangler.toml
-  const deployToml = `name = "${options.workerName}"
-main = "src/index.ts"
-compatibility_date = "2024-12-01"
-workers_dev = true
-account_id = "${options.accountId}"
-
-# Static assets (LIFF pages) served by Workers Assets
-# SPA fallback ensures all non-API paths serve index.html
-[assets]
-not_found_handling = "single-page-application"
-
-[[d1_databases]]
-binding = "DB"
-database_name = "${options.d1DatabaseName}"
-database_id = "${options.d1DatabaseId}"
-
-[[r2_buckets]]
-binding = "IMAGES"
-bucket_name = "${options.r2BucketName}"
-
-[triggers]
-crons = ["*/5 * * * *"]
-`;
+  const deployToml = updateWranglerConfig(originalToml ?? "", {
+    name: options.workerName,
+    accountId: options.accountId,
+    d1DatabaseName: options.d1DatabaseName,
+    d1DatabaseId: options.d1DatabaseId,
+    r2BucketName: options.r2BucketName,
+    assetsDirectory: "dist/client",
+  });
   writeFileSync(tomlPath, deployToml);
 
   // Write .env for Vite build (LIFF client env vars)
   const envPath = join(workerDir, ".env");
+  const originalEnv = existsSync(envPath)
+    ? readFileSync(envPath, "utf-8")
+    : null;
   const envContent = `VITE_LIFF_ID=${options.liffId}\nVITE_BOT_BASIC_ID=${options.botBasicId}\n`;
   writeFileSync(envPath, envContent);
 
@@ -135,13 +123,15 @@ crons = ["*/5 * * * *"]
     throw error;
   } finally {
     // Restore original wrangler.toml
-    if (originalToml) {
+    if (originalToml !== null) {
       writeFileSync(tomlPath, originalToml);
+    } else if (existsSync(tomlPath)) {
+      unlinkSync(tomlPath);
     }
-    // Clean up .env
-    const deployEnvPath = join(workerDir, ".env");
-    if (existsSync(deployEnvPath)) {
-      unlinkSync(deployEnvPath);
+    if (originalEnv !== null) {
+      writeFileSync(envPath, originalEnv);
+    } else if (existsSync(envPath)) {
+      unlinkSync(envPath);
     }
   }
 }
