@@ -6,31 +6,81 @@ import { fileURLToPath } from "node:url";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 interface SqliteColumn {
+  cid: number;
+  name: string;
+  type: string;
+  notnull: number;
+  dflt_value: string | null;
+  pk: number;
+}
+
+interface SqliteIndex {
+  name: string;
+  unique: number;
+  origin: string;
+  partial: number;
+}
+
+interface SqliteIndexColumn {
+  seqno: number;
   name: string;
 }
 
 const packageDirectory = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(packageDirectory, "../../../..");
 const schemaPath = join(repoRoot, "packages/db/schema.sql");
+const migration029Path = join(
+  repoRoot,
+  "packages/db/migrations/029_booking_diagnosis.sql",
+);
 const temporaryDirectory = mkdtempSync(join(tmpdir(), "line-harness-schema-"));
 const databasePath = join(temporaryDirectory, "schema.sqlite");
+const migration029DatabasePath = join(
+  temporaryDirectory,
+  "migration-029.sqlite",
+);
 
-function queryJson<T>(sql: string): T[] {
-  const output = execFileSync("sqlite3", ["-json", databasePath, sql], {
+function queryJson<T>(database: string, sql: string): T[] {
+  const output = execFileSync("sqlite3", ["-json", database, sql], {
     encoding: "utf8",
   });
   return output ? (JSON.parse(output) as T[]) : [];
 }
 
-function columnsFor(table: string): string[] {
-  return queryJson<SqliteColumn>(`PRAGMA table_info("${table}")`).map(
-    ({ name }) => name,
+function columnsFor(database: string, table: string): SqliteColumn[] {
+  return queryJson<SqliteColumn>(
+    database,
+    `PRAGMA table_info("${table}")`,
   );
+}
+
+function indexesFor(
+  database: string,
+  table: string,
+): Array<SqliteIndex & { columns: string[] }> {
+  return queryJson<SqliteIndex>(
+    database,
+    `PRAGMA index_list("${table}")`,
+  )
+    .map((index) => ({
+      ...index,
+      columns: queryJson<SqliteIndexColumn>(
+        database,
+        `PRAGMA index_info("${index.name}")`,
+      )
+        .sort((left, right) => left.seqno - right.seqno)
+        .map(({ name }) => name),
+    }))
+    .sort((left, right) => left.name.localeCompare(right.name));
 }
 
 beforeAll(() => {
   execFileSync("sqlite3", [databasePath], {
     input: readFileSync(schemaPath),
+    stdio: ["pipe", "pipe", "pipe"],
+  });
+  execFileSync("sqlite3", [migration029DatabasePath], {
+    input: readFileSync(migration029Path),
     stdio: ["pipe", "pipe", "pipe"],
   });
 });
@@ -42,6 +92,7 @@ afterAll(() => {
 describe("production schema parity", () => {
   it("initializes the current concierge-ready baseline tables", () => {
     const tables = queryJson<{ name: string }>(
+      databasePath,
       "SELECT name FROM sqlite_master WHERE type = 'table'",
     ).map(({ name }) => name);
 
@@ -107,6 +158,60 @@ describe("production schema parity", () => {
       ],
     ],
   ])("contains current columns used by %s", (table, expectedColumns) => {
-    expect(columnsFor(table)).toEqual(expect.arrayContaining(expectedColumns));
+    expect(columnsFor(databasePath, table).map(({ name }) => name)).toEqual(
+      expect.arrayContaining(expectedColumns),
+    );
+  });
+
+  it.each([
+    "booking_services",
+    "booking_staff",
+    "booking_courses",
+    "booking_slots",
+    "booking_availability",
+    "bookings",
+    "booking_reminders",
+    "diagnosis_form_config",
+    "diagnosis_questions",
+    "diagnosis_configs",
+    "diagnosis_results",
+  ])("matches migration 029 metadata and indexes for %s", (table) => {
+    expect(columnsFor(databasePath, table)).toEqual(
+      columnsFor(migration029DatabasePath, table),
+    );
+    expect(indexesFor(databasePath, table)).toEqual(
+      indexesFor(migration029DatabasePath, table),
+    );
+  });
+
+  it("does not add booking timestamp defaults absent from migration 029", () => {
+    const timestampDefaults = [
+      ["booking_services", "created_at"],
+      ["booking_services", "updated_at"],
+      ["booking_staff", "created_at"],
+      ["booking_courses", "created_at"],
+      ["booking_slots", "created_at"],
+      ["booking_availability", "created_at"],
+      ["bookings", "created_at"],
+      ["bookings", "updated_at"],
+      ["booking_reminders", "created_at"],
+    ].map(([table, column]) => {
+      const metadata = columnsFor(databasePath, table).find(
+        ({ name }) => name === column,
+      );
+      return [table, column, metadata?.dflt_value];
+    });
+
+    expect(timestampDefaults).toEqual([
+      ["booking_services", "created_at", null],
+      ["booking_services", "updated_at", null],
+      ["booking_staff", "created_at", null],
+      ["booking_courses", "created_at", null],
+      ["booking_slots", "created_at", null],
+      ["booking_availability", "created_at", null],
+      ["bookings", "created_at", null],
+      ["bookings", "updated_at", null],
+      ["booking_reminders", "created_at", null],
+    ]);
   });
 });

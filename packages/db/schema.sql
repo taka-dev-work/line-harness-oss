@@ -812,8 +812,8 @@ CREATE TABLE IF NOT EXISTS booking_services (
   enable_google_meet INTEGER NOT NULL DEFAULT 0,
   is_active INTEGER NOT NULL DEFAULT 1,
   org_id TEXT,
-  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%f', 'now', '+9 hours')),
-  updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%f', 'now', '+9 hours'))
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS booking_staff (
@@ -823,7 +823,7 @@ CREATE TABLE IF NOT EXISTS booking_staff (
   email TEXT,
   google_calendar_id TEXT,
   is_active INTEGER NOT NULL DEFAULT 1,
-  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%f', 'now', '+9 hours'))
+  created_at TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS booking_courses (
@@ -835,7 +835,7 @@ CREATE TABLE IF NOT EXISTS booking_courses (
   description TEXT,
   price INTEGER NOT NULL DEFAULT 0,
   is_active INTEGER NOT NULL DEFAULT 1,
-  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%f', 'now', '+9 hours'))
+  created_at TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS booking_slots (
@@ -852,7 +852,7 @@ CREATE TABLE IF NOT EXISTS booking_slots (
   booked_count INTEGER NOT NULL DEFAULT 0,
   is_cancelled INTEGER NOT NULL DEFAULT 0,
   google_event_id TEXT,
-  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%f', 'now', '+9 hours'))
+  created_at TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS booking_availability (
@@ -864,7 +864,7 @@ CREATE TABLE IF NOT EXISTS booking_availability (
   start_time TEXT NOT NULL,
   end_time TEXT NOT NULL,
   is_available INTEGER NOT NULL DEFAULT 1,
-  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%f', 'now', '+9 hours'))
+  created_at TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS bookings (
@@ -886,8 +886,8 @@ CREATE TABLE IF NOT EXISTS bookings (
   google_meet_url TEXT,
   cancelled_at TEXT,
   org_id TEXT,
-  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%f', 'now', '+9 hours')),
-  updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%f', 'now', '+9 hours'))
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS booking_reminders (
@@ -896,7 +896,7 @@ CREATE TABLE IF NOT EXISTS booking_reminders (
   remind_at TEXT NOT NULL,
   status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'sent', 'failed')),
   sent_at TEXT,
-  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%f', 'now', '+9 hours'))
+  created_at TEXT NOT NULL
 );
 
 CREATE INDEX IF NOT EXISTS idx_booking_services_slug ON booking_services(slug);
@@ -912,8 +912,8 @@ CREATE TABLE IF NOT EXISTS diagnosis_form_config (
   org_id TEXT,
   form_name TEXT NOT NULL DEFAULT '診断',
   form_title TEXT NOT NULL DEFAULT '診断',
-  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%f', 'now', '+9 hours')),
-  updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%f', 'now', '+9 hours'))
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS diagnosis_questions (
@@ -924,8 +924,8 @@ CREATE TABLE IF NOT EXISTS diagnosis_questions (
   text TEXT NOT NULL,
   maps_to_type TEXT NOT NULL,
   options TEXT NOT NULL,
-  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%f', 'now', '+9 hours')),
-  updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%f', 'now', '+9 hours'))
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS diagnosis_configs (
@@ -938,8 +938,8 @@ CREATE TABLE IF NOT EXISTS diagnosis_configs (
   line_message TEXT NOT NULL,
   manga_lp_url TEXT NOT NULL DEFAULT '',
   color TEXT NOT NULL DEFAULT '#6366f1',
-  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%f', 'now', '+9 hours')),
-  updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%f', 'now', '+9 hours'))
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS diagnosis_results (
@@ -953,7 +953,7 @@ CREATE TABLE IF NOT EXISTS diagnosis_results (
   result_label TEXT,
   score TEXT,
   answers TEXT NOT NULL DEFAULT '[]',
-  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%f', 'now', '+9 hours'))
+  created_at TEXT NOT NULL
 );
 
 CREATE INDEX IF NOT EXISTS idx_diagnosis_questions_order ON diagnosis_questions(sort_order);

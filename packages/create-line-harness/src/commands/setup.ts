@@ -11,7 +11,10 @@ import { createDatabase } from "../steps/database.js";
 import { deployWorker } from "../steps/deploy-worker.js";
 import { deployAdmin } from "../steps/deploy-admin.js";
 import { setSecrets } from "../steps/secrets.js";
-import { generateMcpConfig } from "../steps/mcp-config.js";
+import {
+  generateMcpConfig,
+  refreshExistingMcpConfig,
+} from "../steps/mcp-config.js";
 import { generateApiKey } from "../lib/crypto.js";
 import {
   INSTALLER_CONFIG_FILE,
@@ -542,11 +545,15 @@ ON CONFLICT(channel_id) DO UPDATE SET
   }
 
   // Step 14: Generate MCP config
-  const addMcp = await p.confirm({
-    message: "MCP 設定を .mcp.json に追加しますか？（Claude Code / Cursor 用）",
-  });
-  if (addMcp && !p.isCancel(addMcp)) {
-    generateMcpConfig({ workerUrl: state.workerUrl!, apiKey });
+  const mcpOptions = { workerUrl: state.workerUrl!, apiKey };
+  const refreshedMcp = refreshExistingMcpConfig(mcpOptions);
+  if (!refreshedMcp) {
+    const addMcp = await p.confirm({
+      message: "MCP 設定を .mcp.json に追加しますか？（Claude Code / Cursor 用）",
+    });
+    if (addMcp && !p.isCancel(addMcp)) {
+      generateMcpConfig(mcpOptions);
+    }
   }
 
   // Step 15: Show completion screen
