@@ -13,8 +13,34 @@ import { getFriendByLineUserId, getFriendById } from '@line-crm/db';
 import { addTagToFriend, enrollFriendInScenario } from '@line-crm/db';
 import type { Form as DbForm, FormSubmission as DbFormSubmission } from '@line-crm/db';
 import type { Env } from '../index.js';
+import {
+  buildPublicFormSubmissionContext,
+  getLineIdTokenFromAuthorization,
+  verifyLineIdToken,
+  type PublicFormSubmissionBody,
+} from '../services/line-id-token.js';
 
 const forms = new Hono<Env>();
+
+async function resolveVerifiedFormFriend(
+  c: { req: { header: (name: string) => string | undefined }; env: Env['Bindings'] },
+  body: PublicFormSubmissionBody,
+) {
+  const idToken = getLineIdTokenFromAuthorization(c.req.header('Authorization'));
+  const verifiedLineUserId = await verifyLineIdToken(idToken, c.env.LINE_LOGIN_CHANNEL_ID);
+  const untrustedContext = buildPublicFormSubmissionContext(body, verifiedLineUserId);
+  if (untrustedContext.rejected) return { context: untrustedContext, friend: null };
+
+  const friend = verifiedLineUserId
+    ? await getFriendByLineUserId(c.env.DB, verifiedLineUserId)
+    : null;
+  return {
+    context: buildPublicFormSubmissionContext(body, verifiedLineUserId, {
+      trustedFriendId: friend?.id ?? null,
+    }),
+    friend,
+  };
+}
 
 function serializeForm(row: DbForm) {
   return {
@@ -199,16 +225,9 @@ forms.get('/api/forms/:id/submissions', async (c) => {
 forms.post('/api/forms/:id/opened', async (c) => {
   try {
     const formId = c.req.param('id');
-    const body = await c.req.json<{ lineUserId?: string; friendId?: string }>();
-    const lineUserId = body.lineUserId;
-    const friendId = body.friendId;
-
-    // Resolve friend
-    let friend = friendId
-      ? await getFriendById(c.env.DB, friendId)
-      : lineUserId
-        ? await getFriendByLineUserId(c.env.DB, lineUserId)
-        : null;
+    const body = await c.req.json<PublicFormSubmissionBody>();
+    const { context, friend } = await resolveVerifiedFormFriend(c, body);
+    if (context.rejected) return c.json({ success: false, error: 'LINE identity mismatch' }, 400);
 
     const now = jstNow();
     await c.env.DB.prepare(
@@ -231,15 +250,9 @@ forms.post('/api/forms/:id/opened', async (c) => {
 // POST /api/forms/:id/partial — save survey answers without x_username (public, used by LIFF page 1)
 forms.post('/api/forms/:id/partial', async (c) => {
   try {
-    const formId = c.req.param('id');
-    const body = await c.req.json<{ lineUserId?: string; friendId?: string; data?: Record<string, unknown> }>();
-
-    // Resolve friend
-    let friend = body.friendId
-      ? await getFriendById(c.env.DB, body.friendId)
-      : body.lineUserId
-        ? await getFriendByLineUserId(c.env.DB, body.lineUserId)
-        : null;
+    const body = await c.req.json<PublicFormSubmissionBody>();
+    const { context, friend } = await resolveVerifiedFormFriend(c, body);
+    if (context.rejected) return c.json({ success: false, error: 'LINE identity mismatch' }, 400);
 
     if (!friend) {
       return c.json({ success: false, error: 'Friend not found' }, 404);
@@ -247,7 +260,7 @@ forms.post('/api/forms/:id/partial', async (c) => {
 
     // Save survey data to friend metadata (merge with existing)
     const existingMeta = friend.metadata ? JSON.parse(friend.metadata) : {};
-    const merged = { ...existingMeta, ...body.data };
+    const merged = { ...existingMeta, ...context.data };
     await c.env.DB.prepare(
       'UPDATE friends SET metadata = ?, updated_at = ? WHERE id = ?',
     ).bind(JSON.stringify(merged), jstNow(), friend.id).run();
@@ -271,15 +284,12 @@ forms.post('/api/forms/:id/submit', async (c) => {
       return c.json({ success: false, error: 'This form is no longer accepting responses' }, 400);
     }
 
-    const body = await c.req.json<{
-      lineUserId?: string;
-      friendId?: string;
-      data?: Record<string, unknown>;
-      _skipWebhook?: boolean;
-      trackedLinkId?: string;
-    }>();
-
-    const submissionData = body.data ?? {};
+    const body = await c.req.json<PublicFormSubmissionBody>();
+    const { context } = await resolveVerifiedFormFriend(c, body);
+    if (context.rejected) {
+      return c.json({ success: false, error: 'LINE identity mismatch' }, 400);
+    }
+    const submissionData = context.data;
 
     // Validate required fields
     const fields = JSON.parse(form.fields || '[]') as Array<{
@@ -301,21 +311,11 @@ forms.post('/api/forms/:id/submit', async (c) => {
       }
     }
 
-    // Resolve friend by lineUserId or friendId
-    let friendId: string | null = body.friendId ?? null;
-    if (!friendId && body.lineUserId) {
-      const friend = await getFriendByLineUserId(c.env.DB, body.lineUserId);
-      if (friend) {
-        friendId = friend.id;
-      }
-    }
+    const friendId = context.friendId;
 
-    // Webhook gate — skip if client pre-verified via repliers endpoint
-    delete submissionData._webhookVerified;
-    const skipWebhook = Boolean(body._skipWebhook);
-    delete submissionData._skipWebhook;
+    // Public LIFF requests always run configured webhook validation.
     let webhookData: Record<string, unknown> | null = null;
-    if (form.on_submit_webhook_url && !skipWebhook) {
+    if (form.on_submit_webhook_url && context.shouldValidateWebhook) {
       const webhookResult = await callFormWebhook(form, submissionData);
       webhookData = webhookResult.data as Record<string, unknown> | null;
       if (!webhookResult.passed) {
@@ -390,7 +390,7 @@ forms.post('/api/forms/:id/submit', async (c) => {
           db,
           {
             friendId,
-            requestedTrackedLinkId: body.trackedLinkId ?? null,
+            requestedTrackedLinkId: context.trackedLinkId,
           },
           { getFriendById, getTrackedLinkById, getMessageTemplateById },
         );
