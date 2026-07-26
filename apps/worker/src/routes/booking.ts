@@ -24,6 +24,7 @@ import {
 import type { Booking, BookingService, BookingSlot } from '@line-crm/db';
 import type { Env } from '../index.js';
 import { GoogleCalendarClient, getGoogleCalendarAccessToken } from '../services/google-calendar.js';
+import { escapeHtml, serializeJsonForInlineScript } from '../utils/html.js';
 
 export const booking = new Hono<Env>();
 
@@ -373,7 +374,7 @@ booking.get('/book/:slug', async (c) => {
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>${service.name}</title>
+<title>${escapeHtml(service.name)}</title>
 <style>
 *{box-sizing:border-box}body{margin:0;background:#f6f7f9;color:#111827;font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Helvetica Neue',Arial,sans-serif}.wrap{max-width:760px;margin:0 auto;padding:28px 18px 48px}.panel{background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:22px;box-shadow:0 1px 2px rgba(0,0,0,.04)}h1{font-size:24px;margin:0 0 8px}.desc{color:#6b7280;font-size:14px;line-height:1.7;margin:0 0 20px}.section-title{font-size:14px;font-weight:800;color:#374151;margin:0 0 10px}.calendar{border:1px solid #e5e7eb;border-radius:12px;overflow:hidden;background:#fff}.cal-head{display:flex;align-items:center;justify-content:space-between;background:#f9fafb;padding:12px}.cal-head button{width:40px;height:40px;margin:0;padding:0;border:1px solid #e5e7eb;border-radius:10px;background:#fff;color:#111827;font-size:18px}.month{font-weight:800;font-size:16px}.week,.days{display:grid;grid-template-columns:repeat(7,1fr)}.week div{padding:10px 0;text-align:center;font-size:12px;font-weight:800;color:#6b7280;border-top:1px solid #eef2f7}.day{min-height:68px;margin:0;border:0;border-top:1px solid #eef2f7;border-right:1px solid #eef2f7;border-radius:0;background:#fff;color:#111827;padding:8px 4px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px}.day:nth-child(7n){border-right:0}.day.empty{background:#fafafa;cursor:default}.day.disabled{color:#cbd5e1;background:#fafafa;cursor:not-allowed}.day.available{background:#f0fdf4;color:#064e3b}.day.selected{outline:2px solid #06C755;outline-offset:-2px}.day-num{font-weight:800;font-size:16px}.badge{font-size:11px;font-weight:800;color:#047857}.selected-slot{margin:12px 0 0;padding:12px;border:1px solid #bbf7d0;border-radius:10px;background:#f0fdf4;color:#047857;font-size:14px;font-weight:800;display:none}.grid{display:grid;gap:12px;margin-top:18px}label{font-size:13px;font-weight:700;color:#374151}input,select,textarea{width:100%;margin-top:6px;border:1px solid #d1d5db;border-radius:10px;padding:12px;font-size:16px;background:#fff}button.primary{width:100%;margin-top:18px;border:0;border-radius:10px;background:#06C755;color:#fff;font-weight:800;font-size:16px;padding:14px 18px;cursor:pointer}.msg{margin-top:14px;padding:12px;border-radius:10px;font-size:14px;display:none}.ok{display:block;background:#ecfdf5;color:#047857}.ng{display:block;background:#fef2f2;color:#b91c1c}.modal{position:fixed;inset:0;background:rgba(15,23,42,.46);display:none;align-items:flex-end;justify-content:center;padding:16px;z-index:20}.modal.open{display:flex}.modal-card{width:100%;max-width:520px;background:#fff;border-radius:16px;padding:18px;box-shadow:0 20px 60px rgba(0,0,0,.22)}.modal-top{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}.modal-title{font-size:17px;font-weight:900}.close{width:36px;height:36px;margin:0;border:0;border-radius:999px;background:#f3f4f6;color:#374151;font-size:22px;line-height:1}.time-list{display:grid;gap:10px;max-height:46vh;overflow:auto}.time-btn{margin:0;width:100%;border:1px solid #d1d5db;border-radius:12px;background:#fff;color:#111827;padding:14px;text-align:left;font-weight:800}.time-btn span{display:block;margin-top:3px;color:#6b7280;font-size:12px;font-weight:600}.time-btn:hover{border-color:#06C755;background:#f0fdf4}@media(max-width:520px){.panel{padding:18px}.wrap{padding:18px 12px 32px}.day{min-height:58px}.day-num{font-size:14px}.badge{font-size:10px}}
 </style>
@@ -381,10 +382,10 @@ booking.get('/book/:slug', async (c) => {
 <body>
 <main class="wrap">
 <section class="panel">
-<h1>${service.name}</h1>
-<p class="desc">${service.description || '予約したい日時を選んで、必要事項を入力してください。'}</p>
+<h1>${escapeHtml(service.name)}</h1>
+<p class="desc">${escapeHtml(service.description || '予約したい日時を選んで、必要事項を入力してください。')}</p>
 <form id="booking-form">
-<input type="hidden" name="serviceId" value="${service.id}">
+<input type="hidden" name="serviceId" value="${escapeHtml(service.id)}">
 <input type="hidden" name="slotId" required>
 <p class="section-title">予約日時を選択</p>
 ${slots.length ? '<div class="calendar"><div class="cal-head"><button type="button" id="prev-month" aria-label="前の月">‹</button><div id="month-label" class="month"></div><button type="button" id="next-month" aria-label="次の月">›</button></div><div class="week"><div>日</div><div>月</div><div>火</div><div>水</div><div>木</div><div>金</div><div>土</div></div><div id="calendar-days" class="days"></div></div><div id="selected-slot" class="selected-slot"></div>' : '<p class="desc">現在、予約できる枠がありません。</p>'}
@@ -393,10 +394,10 @@ ${slots.length ? '<div class="calendar"><div class="cal-head"><button type="butt
 ${fields.map((field) => {
   const required = field.required ? 'required' : '';
   if (field.type === 'select') {
-    const options = (field.options ?? []).map((option) => `<option value="${option}">${option}</option>`).join('');
-    return `<label>${field.label}${field.required ? ' *' : ''}<select name="${field.key}" ${required}><option value="">選択してください</option>${options}</select></label>`;
+    const options = (field.options ?? []).map((option) => `<option value="${escapeHtml(option)}">${escapeHtml(option)}</option>`).join('');
+    return `<label>${escapeHtml(field.label)}${field.required ? ' *' : ''}<select name="${escapeHtml(field.key)}" ${required}><option value="">選択してください</option>${options}</select></label>`;
   }
-  return `<label>${field.label}${field.required ? ' *' : ''}<input name="${field.key}" type="${field.type === 'email' ? 'email' : field.type === 'phone' ? 'tel' : 'text'}" ${required}></label>`;
+  return `<label>${escapeHtml(field.label)}${field.required ? ' *' : ''}<input name="${escapeHtml(field.key)}" type="${field.type === 'email' ? 'email' : field.type === 'phone' ? 'tel' : 'text'}" ${required}></label>`;
 }).join('')}
 <label>補足メモ<textarea name="note" rows="4" placeholder="相談内容や希望があれば入力してください"></textarea></label>
 </div>
@@ -417,7 +418,10 @@ ${fields.map((field) => {
 <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
 <script>
 const form=document.getElementById('booking-form');const msg=document.getElementById('message');
-const slots=${JSON.stringify(slotData)};
+const slots=${serializeJsonForInlineScript(slotData)};
+const bookingApiUrl=${serializeJsonForInlineScript(apiUrl)};
+const configuredLiffId=${serializeJsonForInlineScript(liffId)};
+const customerFieldKeys=${serializeJsonForInlineScript(fields.map((field) => field.key))};
 const slotInput=form.querySelector('input[name="slotId"]');
 const selectedSlot=document.getElementById('selected-slot');
 const calendarDays=document.getElementById('calendar-days');
@@ -445,11 +449,11 @@ async function hydrateLineUserId(){
  const fromUrl=params.get('lineUserId')||params.get('uid')||params.get('line_user_id');
  const fromStore=localStorage.getItem('line_user_id')||'';
  if(fromUrl||fromStore){lineInput.value=fromUrl||fromStore;lineInput.closest('label').style.display='none';return;}
- const liffId=params.get('liffId')||'${liffId}';
+ const liffId=params.get('liffId')||configuredLiffId;
  if(liffId&&window.liff){try{await liff.init({liffId});if(liff.isLoggedIn()){const p=await liff.getProfile();if(p.userId){lineInput.value=p.userId;localStorage.setItem('line_user_id',p.userId);lineInput.closest('label').style.display='none';}}}catch(_){}}
 }
 hydrateLineUserId();
-form.addEventListener('submit',async(e)=>{e.preventDefault();msg.className='msg';if(!slotInput.value){msg.className='msg ng';msg.textContent='予約したい日付と時間を選択してください。';msg.style.display='block';return;}msg.textContent='送信中です...';msg.style.display='block';const fd=new FormData(form);const customerInfo={};${JSON.stringify(fields.map((f) => f.key))}.forEach(k=>customerInfo[k]=fd.get(k)||'');const payload={serviceId:fd.get('serviceId'),slotId:fd.get('slotId'),lineUserId:fd.get('lineUserId'),customerInfo,note:fd.get('note')||''};try{const res=await fetch('${apiUrl}',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});const data=await res.json();if(!data.success)throw new Error(data.error||'予約に失敗しました');msg.className='msg ok';msg.textContent=data.data?.message||'予約を受け付けました。';form.reset();slotInput.value='';if(selectedSlot){selectedSlot.style.display='none';selectedSlot.textContent='';}}catch(err){msg.className='msg ng';msg.textContent=err.message||'予約に失敗しました';}});
+form.addEventListener('submit',async(e)=>{e.preventDefault();msg.className='msg';if(!slotInput.value){msg.className='msg ng';msg.textContent='予約したい日付と時間を選択してください。';msg.style.display='block';return;}msg.textContent='送信中です...';msg.style.display='block';const fd=new FormData(form);const customerInfo={};customerFieldKeys.forEach(k=>customerInfo[k]=fd.get(k)||'');const payload={serviceId:fd.get('serviceId'),slotId:fd.get('slotId'),lineUserId:fd.get('lineUserId'),customerInfo,note:fd.get('note')||''};try{const res=await fetch(bookingApiUrl,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});const data=await res.json();if(!data.success)throw new Error(data.error||'予約に失敗しました');msg.className='msg ok';msg.textContent=data.data?.message||'予約を受け付けました。';form.reset();slotInput.value='';if(selectedSlot){selectedSlot.style.display='none';selectedSlot.textContent='';}}catch(err){msg.className='msg ng';msg.textContent=err.message||'予約に失敗しました';}});
 </script>
 </body>
 </html>`);
@@ -460,5 +464,5 @@ booking.get('/book/manage/:token', async (c) => {
   const row = await getBookingByToken(c.env.DB, token);
   if (!row) return c.html('<h1>予約が見つかりません</h1>', 404);
   const apiUrl = `${workerBase(c)}/api/booking/cancel/${token}`;
-  return c.html(`<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>予約確認</title><style>body{margin:0;background:#f6f7f9;font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Helvetica Neue',Arial,sans-serif;color:#111827}.wrap{max-width:620px;margin:0 auto;padding:28px 18px}.panel{background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:22px}button{width:100%;margin-top:18px;border:0;border-radius:10px;background:#ef4444;color:#fff;font-weight:800;font-size:16px;padding:14px}.muted{color:#6b7280}.msg{margin-top:14px}</style></head><body><main class="wrap"><section class="panel"><h1>予約確認</h1><p class="muted">状態: ${row.status}</p><p>予約ID: ${row.id}</p>${row.status !== 'cancelled' ? '<button id="cancel">予約をキャンセルする</button>' : ''}<p id="msg" class="msg"></p></section></main><script>const btn=document.getElementById('cancel');if(btn){btn.addEventListener('click',async()=>{if(!confirm('予約をキャンセルしますか？'))return;const res=await fetch('${apiUrl}',{method:'POST'});const data=await res.json();document.getElementById('msg').textContent=data.success?'キャンセルしました':(data.error||'キャンセルに失敗しました');});}</script></body></html>`);
+  return c.html(`<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>予約確認</title><style>body{margin:0;background:#f6f7f9;font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Helvetica Neue',Arial,sans-serif;color:#111827}.wrap{max-width:620px;margin:0 auto;padding:28px 18px}.panel{background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:22px}button{width:100%;margin-top:18px;border:0;border-radius:10px;background:#ef4444;color:#fff;font-weight:800;font-size:16px;padding:14px}.muted{color:#6b7280}.msg{margin-top:14px}</style></head><body><main class="wrap"><section class="panel"><h1>予約確認</h1><p class="muted">状態: ${escapeHtml(row.status)}</p><p>予約ID: ${escapeHtml(row.id)}</p>${row.status !== 'cancelled' ? '<button id="cancel">予約をキャンセルする</button>' : ''}<p id="msg" class="msg"></p></section></main><script>const cancelApiUrl=${serializeJsonForInlineScript(apiUrl)};const btn=document.getElementById('cancel');if(btn){btn.addEventListener('click',async()=>{if(!confirm('予約をキャンセルしますか？'))return;const res=await fetch(cancelApiUrl,{method:'POST'});const data=await res.json();document.getElementById('msg').textContent=data.success?'キャンセルしました':(data.error||'キャンセルに失敗しました');});}</script></body></html>`);
 });
