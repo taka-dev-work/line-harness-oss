@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { Hono } from 'hono';
 import type { Env } from '../index.js';
 
@@ -101,6 +101,10 @@ beforeEach(() => {
     event_type: 'payment_intent.succeeded',
     processed_at: '2026-07-27T00:00:00+09:00',
   });
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
 });
 
 describe('external webhook authentication', () => {
@@ -245,11 +249,15 @@ describe('external webhook authentication', () => {
   });
 
   test.each([
-    ['stale', -301],
-    ['future', 301],
-  ])('Stripe endpoint rejects a valid but %s signature before side effects', async (_name, offsetSeconds) => {
+    ['accepts', -300, 200, true],
+    ['accepts', 300, 200, true],
+    ['rejects', -301, 401, false],
+    ['rejects', 301, 401, false],
+  ])('Stripe endpoint %s a valid signature %i seconds from fixed now', async (_action, offsetSeconds, expectedStatus, shouldCreateEvent) => {
+    const fixedNow = 1_700_000_000_000;
+    vi.spyOn(Date, 'now').mockReturnValue(fixedNow);
     const body = JSON.stringify({ id: 'evt_1', type: 'payment_intent.succeeded', data: { object: {} } });
-    const timestamp = Math.floor(Date.now() / 1000) + offsetSeconds;
+    const timestamp = Math.floor(fixedNow / 1000) + offsetSeconds;
     const response = await request(stripe, '/api/integrations/stripe/webhook', {
       method: 'POST',
       headers: {
@@ -259,8 +267,12 @@ describe('external webhook authentication', () => {
       body,
     }, { ...baseEnv, STRIPE_WEBHOOK_SECRET: 'stripe-secret' });
 
-    expect(response.status).toBe(401);
-    expect(dbMocks.createStripeEvent).not.toHaveBeenCalled();
+    expect(response.status).toBe(expectedStatus);
+    if (shouldCreateEvent) {
+      expect(dbMocks.createStripeEvent).toHaveBeenCalledOnce();
+    } else {
+      expect(dbMocks.createStripeEvent).not.toHaveBeenCalled();
+    }
   });
 
   test('webhook management list responses expose only hasSecret', async () => {
