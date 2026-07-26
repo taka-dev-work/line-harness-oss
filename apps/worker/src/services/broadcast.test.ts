@@ -3,7 +3,11 @@ import { execFileSync } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { jstNow, recoverStalledBroadcasts } from '@line-crm/db';
+import {
+  jstNow,
+  markBroadcastDeliverySent,
+  recoverStalledBroadcasts,
+} from '@line-crm/db';
 import type { Broadcast } from '@line-crm/db';
 import { LineApiError } from '@line-crm/line-sdk';
 import type { LineClient } from '@line-crm/line-sdk';
@@ -86,12 +90,48 @@ class FakeStatement {
   }
 }
 
+class SqliteStatement {
+  bindings: unknown[] = [];
+
+  constructor(readonly sql: string) {}
+
+  bind(...bindings: unknown[]) {
+    this.bindings = bindings;
+    return this;
+  }
+}
+
+class SqliteD1 {
+  constructor(private readonly databasePath: string) {}
+
+  prepare(sql: string) {
+    return new SqliteStatement(sql);
+  }
+
+  async batch(statements: SqliteStatement[]) {
+    const changes: number[] = [];
+    const script = [
+      'BEGIN IMMEDIATE',
+      ...statements.map((statement) =>
+        `${bindSql(statement.sql, statement.bindings)}; SELECT changes()`,
+      ),
+      'COMMIT',
+    ].join(';\n');
+    const output = sqliteScalar(this.databasePath, script);
+    for (const line of output.split('\n').filter(Boolean)) {
+      changes.push(Number(line));
+    }
+    return changes.map((count) => ({ meta: { changes: count } }));
+  }
+}
+
 class FakeD1 {
   readonly boundSql: Array<{ sql: string; bindings: unknown[] }> = [];
   readonly deliveries = new Map<string, DeliveryRow>();
   readonly messageLog: string[] = [];
   private readonly loggedDeliveryIds = new Set<string>();
   failNextSentRecord = false;
+  afterAudienceFetch?: () => void;
 
   constructor(
     readonly broadcast: Broadcast,
@@ -201,24 +241,30 @@ class FakeD1 {
         : [bindings[1], bindings[0]];
       const cursor = String(bindings.at(-2) ?? '');
       const limit = Number(bindings.at(-1) ?? 25);
-      return this.friends.filter(
+      const rows = this.friends.filter(
         (f) =>
           f.line_account_id === accountId &&
           f.tag_id === tagId &&
           f.is_following === 1 &&
           f.id > cursor,
       ).sort((a, b) => a.id.localeCompare(b.id)).slice(0, limit);
+      this.afterAudienceFetch?.();
+      this.afterAudienceFetch = undefined;
+      return rows;
     }
     if (sql.includes('FROM friends f WHERE')) {
       const accountId = bindings[0];
       const cursor = String(bindings.at(-2) ?? '');
       const limit = Number(bindings.at(-1) ?? 25);
-      return this.friends.filter(
+      const rows = this.friends.filter(
         (f) =>
           f.line_account_id === accountId &&
           f.is_following === 1 &&
           f.id > cursor,
       ).sort((a, b) => a.id.localeCompare(b.id)).slice(0, limit);
+      this.afterAudienceFetch?.();
+      this.afterAudienceFetch = undefined;
+      return rows;
     }
     if (sql.includes('FROM broadcast_deliveries')) {
       const limit = Number(bindings.at(-1) ?? 8);
@@ -237,8 +283,36 @@ class FakeD1 {
 
   run(sql: string, bindings: unknown[]) {
     if (sql.includes('INSERT INTO broadcast_deliveries')) {
-      const [id, broadcastId, friendId, accountId, retryKey, retryKeyCreatedAt] =
-        bindings as string[];
+      const fenced = sql.includes('FROM broadcasts b');
+      const deliveryBindings = (
+        fenced
+          ? [
+              bindings[0],
+              bindings[7],
+              bindings[1],
+              bindings[2],
+              bindings[3],
+              bindings[4],
+            ]
+          : bindings.slice(0, 6)
+      ).map(String);
+      const [
+        id,
+        broadcastId,
+        friendId,
+        accountId,
+        retryKey,
+        retryKeyCreatedAt,
+      ] = deliveryBindings;
+      const raw = this.broadcast as unknown as Record<string, unknown>;
+      if (
+        fenced &&
+        (
+          raw.id !== broadcastId ||
+          raw.line_account_id !== bindings[8] ||
+          raw.queue_lease_token !== bindings[9]
+        )
+      ) return { meta: { changes: 0 } };
       const identity = `${broadcastId}:${friendId}`;
       if (this.deliveries.has(identity) && !sql.includes('ON CONFLICT')) {
         throw new Error('duplicate broadcast delivery');
@@ -341,7 +415,10 @@ class FakeD1 {
     }
     if (sql.includes('SET audience_cursor = ?')) {
       const raw = this.broadcast as unknown as Record<string, unknown>;
-      if (raw.queue_lease_token !== bindings[4]) {
+      if (
+        raw.line_account_id !== bindings[4] ||
+        raw.queue_lease_token !== bindings[5]
+      ) {
         return { meta: { changes: 0 } };
       }
       raw.audience_cursor = bindings[0];
@@ -479,11 +556,110 @@ function sqliteScalar(databasePath: string, sql: string): string {
   }).trim();
 }
 
+function bindSql(sql: string, bindings: unknown[]): string {
+  let index = 0;
+  const bound = sql.replace(/\?/g, () => {
+    if (index >= bindings.length) throw new Error('Missing SQLite binding');
+    return sqliteLiteral(bindings[index++]);
+  });
+  if (index !== bindings.length) throw new Error('Unused SQLite binding');
+  return bound;
+}
+
+function sqliteLiteral(value: unknown): string {
+  if (value === null || value === undefined) return 'NULL';
+  if (typeof value === 'number') return String(value);
+  return `'${String(value).replaceAll("'", "''")}'`;
+}
+
 afterEach(() => {
   vi.useRealTimers();
 });
 
 describe('broadcast delivery isolation and idempotency', () => {
+  it('executes the production sent and message-log SQL against the shipped schema', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'broadcast-sent-sql-'));
+    const databasePath = join(directory, 'sent.sqlite');
+    try {
+      const schemaPath = join(
+        process.cwd(),
+        '../../packages/db/schema.sql',
+      );
+      execFileSync('sqlite3', [databasePath, `.read ${schemaPath}`]);
+      sqliteScalar(
+        databasePath,
+        `INSERT INTO friends (id, line_user_id) VALUES ('friend-sql', 'U-sql');
+         INSERT INTO broadcasts
+           (id, title, message_type, message_content, target_type, status,
+            line_account_id, queue_locked_at, queue_lease_token)
+         VALUES
+           ('broadcast-sql', 'SQL broadcast', 'text', 'hello', 'tag',
+            'sending', '${ACCOUNT_A}', '${jstNow()}', 'lease-sql');
+         INSERT INTO broadcast_deliveries
+           (id, broadcast_id, friend_id, line_account_id, status,
+            attempt_count, retry_key, retry_key_created_at, first_attempted_at,
+            claim_token, created_at, updated_at)
+         VALUES
+           ('delivery-sql', 'broadcast-sql', 'friend-sql', '${ACCOUNT_A}',
+            'uncertain', 1, 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee',
+            '${jstNow()}', '${jstNow()}', 'lease-sql', '${jstNow()}',
+            '${jstNow()}');`,
+      );
+      const broadcast = makeBroadcast({
+        id: 'broadcast-sql',
+        message_content: 'hello',
+        queue_lease_token: 'lease-sql',
+      });
+      const delivery = {
+        id: 'delivery-sql',
+        broadcast_id: 'broadcast-sql',
+        friend_id: 'friend-sql',
+        line_account_id: ACCOUNT_A,
+        line_user_id: 'U-sql',
+        status: 'uncertain' as const,
+        attempt_count: 1,
+        retry_key: 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee',
+        retry_key_created_at: jstNow(),
+        first_attempted_at: jstNow(),
+        last_error: null,
+        claim_token: 'lease-sql',
+      };
+      const sqliteDb = new SqliteD1(databasePath) as unknown as D1Database;
+
+      await expect(
+        markBroadcastDeliverySent(
+          sqliteDb,
+          delivery,
+          broadcast,
+          'lease-sql',
+          jstNow(),
+        ),
+      ).resolves.toBe(true);
+      await expect(
+        markBroadcastDeliverySent(
+          sqliteDb,
+          delivery,
+          broadcast,
+          'lease-sql',
+          jstNow(),
+        ),
+      ).resolves.toBe(true);
+
+      expect(
+        sqliteScalar(
+          databasePath,
+          `SELECT
+             (SELECT status FROM broadcast_deliveries
+              WHERE id = 'delivery-sql') || ':' ||
+             (SELECT COUNT(*) FROM messages_log
+              WHERE broadcast_delivery_id = 'delivery-sql')`,
+        ),
+      ).toBe('sent:1');
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
   it('keeps a fresh +09:00 queue lease when SQLite compares it with UTC now', async () => {
     const directory = mkdtempSync(join(tmpdir(), 'broadcast-lease-'));
     const databasePath = join(directory, 'lease.sqlite');
@@ -854,6 +1030,44 @@ describe('broadcast delivery isolation and idempotency', () => {
     expect(secondLine.sends).toHaveLength(1);
     expect(db.messageLog).toEqual(['friend-a']);
     expect(broadcast.success_count).toBe(1);
+  });
+
+  it.each([
+    { transition: 'lease recovery', completed: false },
+    { transition: 'queue completion', completed: true },
+  ])('does not materialize or advance the cursor after $transition', async ({ completed }) => {
+    const broadcast = makeBroadcast({
+      status: 'sending',
+      segment_conditions: JSON.stringify({
+        operator: 'AND',
+        rules: [{ type: 'is_following', value: true }],
+      }),
+    });
+    const db = new FakeD1(broadcast, [
+      { id: 'friend-a', line_user_id: 'U-a', line_account_id: ACCOUNT_A, is_following: 1, tag_id: 'tag-1' },
+      { id: 'friend-b', line_user_id: 'U-b', line_account_id: ACCOUNT_A, is_following: 1, tag_id: 'tag-2' },
+    ]);
+    db.afterAudienceFetch = () => {
+      const raw = broadcast as unknown as Record<string, unknown>;
+      if (completed) {
+        raw.status = 'sent';
+        raw.sent_at = jstNow();
+        raw.queue_locked_at = null;
+        raw.queue_lease_token = null;
+      } else {
+        raw.queue_locked_at = jstNow();
+        raw.queue_lease_token = 'replacement-owner';
+      }
+    };
+
+    await processQueuedBroadcasts(asD1(db), asLine(new FakeLineClient()));
+
+    expect(db.deliveries.size).toBe(0);
+    expect(broadcast.audience_cursor).toBeNull();
+    expect(broadcast.audience_materialized_at).toBeNull();
+    expect(broadcast.queue_lease_token).toBe(
+      completed ? null : 'replacement-owner',
+    );
   });
 
   it('materializes a large audience once in a bounded invocation before sending', async () => {

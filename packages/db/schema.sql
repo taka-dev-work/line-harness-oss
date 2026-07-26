@@ -207,8 +207,7 @@ CREATE INDEX IF NOT EXISTS idx_messages_log_created_at ON messages_log (created_
 CREATE INDEX IF NOT EXISTS idx_messages_log_friend_source ON messages_log (friend_id, source);
 CREATE INDEX IF NOT EXISTS idx_messages_log_friend_direction_created ON messages_log (friend_id, direction, created_at);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_messages_log_broadcast_delivery
-  ON messages_log (broadcast_delivery_id)
-  WHERE broadcast_delivery_id IS NOT NULL;
+  ON messages_log (broadcast_delivery_id);
 
 -- ============================================================
 -- Auto Replies

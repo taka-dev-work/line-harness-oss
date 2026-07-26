@@ -413,30 +413,69 @@ export async function acquireBroadcastQueueLease(
   return (result.meta.changes ?? 0) > 0;
 }
 
-export async function saveBroadcastAudiencePage(
+export async function materializeBroadcastAudiencePage(
   db: D1Database,
   broadcastId: string,
+  lineAccountId: string,
   leaseToken: string,
+  friends: BroadcastAudienceFriend[],
   cursor: string,
   complete: boolean,
   now = jstNow(),
 ): Promise<boolean> {
-  const result = await db
-    .prepare(
-      `UPDATE broadcasts
-       SET audience_cursor = ?,
-           audience_materialized_at = CASE WHEN ? = 1 THEN ? ELSE NULL END,
-           total_count = (
-             SELECT COUNT(*) FROM broadcast_deliveries
-             WHERE broadcast_id = broadcasts.id
-           ),
-           queue_locked_at = NULL,
-           queue_lease_token = NULL
-       WHERE id = ? AND queue_lease_token = ?`,
-    )
-    .bind(cursor, complete ? 1 : 0, now, broadcastId, leaseToken)
-    .run();
-  return (result.meta.changes ?? 0) > 0;
+  const statements = friends.map((friend) =>
+    db
+      .prepare(
+        `INSERT INTO broadcast_deliveries
+           (id, broadcast_id, friend_id, line_account_id, status, attempt_count,
+            retry_key, retry_key_created_at, last_error, created_at, updated_at)
+         SELECT ?, b.id, ?, ?, 'pending', 0, ?, ?, NULL, ?, ?
+         FROM broadcasts b
+         WHERE b.id = ?
+           AND b.line_account_id = ?
+           AND b.queue_lease_token = ?
+         ON CONFLICT(broadcast_id, friend_id) DO NOTHING`,
+      )
+      .bind(
+        crypto.randomUUID(),
+        friend.id,
+        lineAccountId,
+        crypto.randomUUID(),
+        now,
+        now,
+        now,
+        broadcastId,
+        lineAccountId,
+        leaseToken,
+      ),
+  );
+  statements.push(
+    db
+      .prepare(
+        `UPDATE broadcasts
+         SET audience_cursor = ?,
+             audience_materialized_at = CASE WHEN ? = 1 THEN ? ELSE NULL END,
+             total_count = (
+               SELECT COUNT(*) FROM broadcast_deliveries
+               WHERE broadcast_id = broadcasts.id
+             ),
+             queue_locked_at = NULL,
+             queue_lease_token = NULL
+         WHERE id = ?
+           AND line_account_id = ?
+           AND queue_lease_token = ?`,
+      )
+      .bind(
+        cursor,
+        complete ? 1 : 0,
+        now,
+        broadcastId,
+        lineAccountId,
+        leaseToken,
+      ),
+  );
+  const results = await db.batch(statements);
+  return (results.at(-1)?.meta.changes ?? 0) > 0;
 }
 
 export async function getRetryableBroadcastDeliveries(

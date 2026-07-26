@@ -37,5 +37,4 @@ CREATE INDEX IF NOT EXISTS idx_broadcast_deliveries_account_status
 CREATE INDEX IF NOT EXISTS idx_broadcast_deliveries_friend
   ON broadcast_deliveries (friend_id);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_messages_log_broadcast_delivery
-  ON messages_log (broadcast_delivery_id)
-  WHERE broadcast_delivery_id IS NOT NULL;
+  ON messages_log (broadcast_delivery_id);

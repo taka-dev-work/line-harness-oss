@@ -8,7 +8,7 @@ import {
   getBroadcastAudienceByTag,
   materializeBroadcastDeliveries,
   acquireBroadcastQueueLease,
-  saveBroadcastAudiencePage,
+  materializeBroadcastAudiencePage,
   getRetryableBroadcastDeliveries,
   claimBroadcastDelivery,
   markBroadcastDeliverySent,
@@ -409,20 +409,14 @@ async function processQueuedBroadcastBatches(
         );
       }
 
-      await materializeBroadcastDeliveries(
+      const complete = friends.length < AUDIENCE_MATERIALIZATION_LIMIT;
+      const nextCursor = friends.at(-1)?.id ?? cursor;
+      if (!await materializeBroadcastAudiencePage(
         db,
         broadcast.id,
         accountId,
-        friends,
-        jstNow(),
-      );
-
-      const complete = friends.length < AUDIENCE_MATERIALIZATION_LIMIT;
-      const nextCursor = friends.at(-1)?.id ?? cursor;
-      if (!await saveBroadcastAudiencePage(
-        db,
-        broadcast.id,
         leaseToken,
+        friends,
         nextCursor,
         complete,
         jstNow(),
