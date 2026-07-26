@@ -26,10 +26,10 @@ export async function authMiddleware(c: Context<Env>, next: Next): Promise<Respo
     path === '/setup' ||
     path === '/api/integrations/stripe/webhook' ||
     path.match(/^\/api\/webhooks\/incoming\/[^/]+\/receive$/) ||
-    path.match(/^\/api\/forms\/[^/]+\/submit$/) ||
-    path.match(/^\/api\/forms\/[^/]+\/opened$/) ||
-    path.match(/^\/api\/forms\/[^/]+\/partial$/) ||
-    path.match(/^\/api\/forms\/[^/]+$/) || // GET form definition (public for LIFF)
+    (c.req.method === 'POST' && path.match(/^\/api\/forms\/[^/]+\/submit$/)) ||
+    (c.req.method === 'POST' && path.match(/^\/api\/forms\/[^/]+\/opened$/)) ||
+    (c.req.method === 'POST' && path.match(/^\/api\/forms\/[^/]+\/partial$/)) ||
+    (c.req.method === 'GET' && path.match(/^\/api\/forms\/[^/]+$/)) || // GET form definition (public for LIFF)
     path === '/api/booking/submit' ||
     path.match(/^\/api\/booking\/cancel\/[^/]+$/) ||
     path === '/api/diagnosis/submit' ||
