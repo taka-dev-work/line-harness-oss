@@ -2,11 +2,18 @@ import { Hono } from 'hono';
 import type { Env } from '../index.js';
 import { getFriendByLineUserId } from '@line-crm/db';
 import { LineClient } from '@line-crm/line-sdk';
+import { verifySharedSecret } from '../services/webhook-auth.js';
 
 const app = new Hono<Env>();
 
 // Meet Harness calls this when a hearing session completes
 app.post('/api/meet-callback', async (c) => {
+  const meetSecret = c.env.MEET_CALLBACK_SECRET;
+  if (!meetSecret) return c.json({ success: false, error: 'Meet callback is unavailable' }, 503);
+
+  const valid = await verifySharedSecret(c.req.header('X-Meet-Callback-Secret'), meetSecret);
+  if (!valid) return c.json({ success: false, error: 'Meet callback authentication failed' }, 401);
+
   const body = await c.req.json<{
     session_id: string;
     scenario_id: string;

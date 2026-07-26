@@ -12,6 +12,7 @@ import {
   deleteOutgoingWebhook,
 } from '@line-crm/db';
 import type { Env } from '../index.js';
+import { verifySharedSecret } from '../services/webhook-auth.js';
 
 const webhooks = new Hono<Env>();
 
@@ -26,7 +27,7 @@ webhooks.get('/api/webhooks/incoming', async (c) => {
         id: w.id,
         name: w.name,
         sourceType: w.source_type,
-        secret: w.secret,
+        hasSecret: Boolean(w.secret),
         isActive: Boolean(w.is_active),
         createdAt: w.created_at,
         updatedAt: w.updated_at,
@@ -86,7 +87,7 @@ webhooks.get('/api/webhooks/outgoing', async (c) => {
         name: w.name,
         url: w.url,
         eventTypes: JSON.parse(w.event_types),
-        secret: w.secret,
+        hasSecret: Boolean(w.secret),
         isActive: Boolean(w.is_active),
         createdAt: w.created_at,
         updatedAt: w.updated_at,
@@ -144,6 +145,11 @@ webhooks.post('/api/webhooks/incoming/:id/receive', async (c) => {
     const id = c.req.param('id');
     const wh = await getIncomingWebhookById(c.env.DB, id);
     if (!wh || !wh.is_active) return c.json({ success: false, error: 'Webhook not found or inactive' }, 404);
+    if (!wh.secret) return c.json({ success: false, error: 'Webhook secret is unavailable' }, 503);
+
+    // External callers provide the stored shared secret in X-Webhook-Secret.
+    const valid = await verifySharedSecret(c.req.header('X-Webhook-Secret'), wh.secret);
+    if (!valid) return c.json({ success: false, error: 'Webhook authentication failed' }, 401);
 
     const body = await c.req.json();
 
