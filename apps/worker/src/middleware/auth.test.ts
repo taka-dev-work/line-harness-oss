@@ -41,13 +41,19 @@ describe('form route authentication boundaries', () => {
     }
   });
 
-  test('requires authentication for form updates and deletes', async () => {
+  test('requires authentication for form updates', async () => {
     const app = setupApp();
 
     const updateResponse = await app.request('/api/forms/form-1', { method: 'PUT' }, env);
-    const deleteResponse = await app.request('/api/forms/form-1', { method: 'DELETE' }, env);
 
     expect(updateResponse.status).toBe(401);
+  });
+
+  test('requires authentication for form deletes', async () => {
+    const app = setupApp();
+
+    const deleteResponse = await app.request('/api/forms/form-1', { method: 'DELETE' }, env);
+
     expect(deleteResponse.status).toBe(401);
   });
 });
