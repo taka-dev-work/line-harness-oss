@@ -5,6 +5,7 @@ import {
   createBroadcast,
   updateBroadcast,
   deleteBroadcast,
+  getBroadcastAudienceByTag,
 } from '@line-crm/db';
 import type { Broadcast as DbBroadcast, BroadcastMessageType, BroadcastTargetType } from '@line-crm/db';
 import { LineClient } from '@line-crm/line-sdk';
@@ -195,15 +196,25 @@ broadcasts.post('/api/broadcasts/:id/send', async (c) => {
 
     // target_type='tag' で対象が多い場合はキュー方式
     if (existing.target_type === 'tag' && existing.target_tag_id) {
-      const { getFriendsByTag } = await import('@line-crm/db');
-      const friends = await getFriendsByTag(c.env.DB, existing.target_tag_id);
-      const followingCount = friends.filter(f => f.is_following).length;
+      const accountId = existing.line_account_id;
+      if (!accountId) {
+        return c.json(
+          { success: false, error: 'Broadcast must belong to a LINE account' },
+          400,
+        );
+      }
+      const friends = await getBroadcastAudienceByTag(
+        c.env.DB,
+        existing.target_tag_id,
+        accountId,
+      );
+      const followingCount = friends.length;
 
       if (followingCount > 500) {
         // Set segment_conditions to a marker so getQueuedBroadcasts() can find it
         const tagMarker = JSON.stringify({ operator: 'AND', rules: [{ type: 'tag_exists', value: existing.target_tag_id }] });
         await c.env.DB.prepare(
-          `UPDATE broadcasts SET status = 'sending', batch_offset = 0, segment_conditions = ? WHERE id = ?`
+          `UPDATE broadcasts SET status = 'sending', batch_offset = 0, queue_locked_at = NULL, segment_conditions = ? WHERE id = ?`
         ).bind(tagMarker, id).run();
         const result = await getBroadcastById(c.env.DB, id);
         return c.json({ success: true, data: result ? serializeBroadcast(result) : null, queued: true, message: 'Broadcast queued for batch processing by Cron' }, 202);
@@ -254,7 +265,7 @@ broadcasts.post('/api/broadcasts/:id/send-segment', async (c) => {
 
     // セグメント配信は常にキュー方式（タイムアウト防止）
     await c.env.DB.prepare(
-      `UPDATE broadcasts SET status = 'sending', batch_offset = 0, segment_conditions = ? WHERE id = ?`
+      `UPDATE broadcasts SET status = 'sending', batch_offset = 0, queue_locked_at = NULL, segment_conditions = ? WHERE id = ?`
     ).bind(JSON.stringify(body.conditions), id).run();
 
     const result = await getBroadcastById(c.env.DB, id);

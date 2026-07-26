@@ -15,7 +15,37 @@ export interface Broadcast {
   sent_at: string | null;
   total_count: number;
   success_count: number;
+  line_account_id?: string | null;
+  batch_offset?: number;
+  segment_conditions?: string | null;
+  queue_locked_at?: string | null;
   created_at: string;
+}
+
+export interface BroadcastAudienceFriend {
+  id: string;
+  line_user_id: string;
+}
+
+export type BroadcastDeliveryStatus =
+  | 'pending'
+  | 'uncertain'
+  | 'failed'
+  | 'sent'
+  | 'manual_review';
+
+export interface BroadcastDelivery {
+  id: string;
+  broadcast_id: string;
+  friend_id: string;
+  line_account_id: string;
+  line_user_id: string;
+  status: BroadcastDeliveryStatus;
+  attempt_count: number;
+  retry_key: string;
+  retry_key_created_at: string;
+  first_attempted_at: string | null;
+  last_error: string | null;
 }
 
 export async function getBroadcasts(db: D1Database, accountId?: string): Promise<Broadcast[]> {
@@ -283,32 +313,226 @@ export async function markInsightFailed(
 export async function getQueuedBroadcasts(db: D1Database): Promise<Broadcast[]> {
   // Only pick up broadcasts explicitly queued via segment_conditions
   // (segment_conditions IS NOT NULL distinguishes queued batches from normal tag sends)
-  // batch_offset >= 0: ロック中（-1）のものは除外
+  // queue_locked_at IS NULL: another Worker does not hold the lease
   // sent_at IS NULL: 完了済みは除外
   const result = await db
     .prepare(
-      `SELECT * FROM broadcasts WHERE status = 'sending' AND batch_offset >= 0 AND sent_at IS NULL AND segment_conditions IS NOT NULL ORDER BY created_at ASC`,
+      `SELECT * FROM broadcasts
+       WHERE status = 'sending'
+         AND batch_offset >= 0
+         AND queue_locked_at IS NULL
+         AND sent_at IS NULL
+         AND segment_conditions IS NOT NULL
+       ORDER BY created_at ASC`,
     )
     .all<Broadcast>();
   return result.results;
 }
 
-/**
- * ロック解除: batch_offset=-1 のまま停滞したブロードキャストを復旧する。
- * 条件: success_count=0 + created_at から30分以上経過 + segment_conditions あり
- * 送信途中で停滞したもの（success_count > 0）は手動対応。
- */
+export async function getBroadcastAudienceByTag(
+  db: D1Database,
+  tagId: string,
+  lineAccountId: string,
+): Promise<BroadcastAudienceFriend[]> {
+  const result = await db
+    .prepare(
+      `SELECT f.id, f.line_user_id
+       FROM friends f
+       INNER JOIN friend_tags ft ON ft.friend_id = f.id
+       WHERE f.line_account_id = ?
+         AND ft.tag_id = ?
+         AND f.is_following = 1
+       ORDER BY f.created_at ASC, f.id ASC`,
+    )
+    .bind(lineAccountId, tagId)
+    .all<BroadcastAudienceFriend>();
+  return result.results ?? [];
+}
+
+export async function materializeBroadcastDeliveries(
+  db: D1Database,
+  broadcastId: string,
+  lineAccountId: string,
+  friends: BroadcastAudienceFriend[],
+  now = jstNow(),
+): Promise<void> {
+  if (friends.length === 0) return;
+
+  await db.batch(
+    friends.map((friend) =>
+      db
+        .prepare(
+          `INSERT INTO broadcast_deliveries
+             (id, broadcast_id, friend_id, line_account_id, status, attempt_count,
+              retry_key, retry_key_created_at, last_error, created_at, updated_at)
+           VALUES (?, ?, ?, ?, 'pending', 0, ?, ?, NULL, ?, ?)
+           ON CONFLICT(broadcast_id, friend_id) DO NOTHING`,
+        )
+        .bind(
+          crypto.randomUUID(),
+          broadcastId,
+          friend.id,
+          lineAccountId,
+          crypto.randomUUID(),
+          now,
+          now,
+          now,
+        ),
+    ),
+  );
+}
+
+export async function expireBroadcastDeliveryRetryKeys(
+  db: D1Database,
+  broadcastId: string,
+  now = jstNow(),
+): Promise<void> {
+  await db
+    .prepare(
+      `UPDATE broadcast_deliveries
+       SET status = 'manual_review',
+           last_error = 'LINE retry key expired after 24 hours; manual review required',
+           updated_at = ?
+       WHERE broadcast_id = ?
+         AND status IN ('failed', 'uncertain')
+         AND first_attempted_at IS NOT NULL
+         AND julianday(?) - julianday(first_attempted_at) >= 1`,
+    )
+    .bind(now, broadcastId, now)
+    .run();
+}
+
+export async function getRetryableBroadcastDeliveries(
+  db: D1Database,
+  broadcastId: string,
+  lineAccountId: string,
+  now = jstNow(),
+): Promise<BroadcastDelivery[]> {
+  const result = await db
+    .prepare(
+      `SELECT d.*, f.line_user_id
+       FROM broadcast_deliveries d
+       INNER JOIN friends f
+         ON f.id = d.friend_id
+        AND f.line_account_id = d.line_account_id
+       WHERE d.broadcast_id = ?
+         AND d.line_account_id = ?
+         AND d.status IN ('pending', 'failed', 'uncertain')
+         AND (
+           d.first_attempted_at IS NULL
+           OR julianday(?) - julianday(d.first_attempted_at) < 1
+         )
+       ORDER BY d.created_at ASC, d.id ASC`,
+    )
+    .bind(broadcastId, lineAccountId, now)
+    .all<BroadcastDelivery>();
+  return result.results ?? [];
+}
+
+export async function markBroadcastDeliveryAttempt(
+  db: D1Database,
+  deliveryId: string,
+  now = jstNow(),
+): Promise<void> {
+  await db
+    .prepare(
+      `UPDATE broadcast_deliveries
+       SET status = 'uncertain',
+           attempt_count = attempt_count + 1,
+           first_attempted_at = COALESCE(first_attempted_at, ?),
+           last_attempted_at = ?,
+           updated_at = ?
+       WHERE id = ?`,
+    )
+    .bind(now, now, now, deliveryId)
+    .run();
+}
+
+export async function markBroadcastDeliverySent(
+  db: D1Database,
+  delivery: BroadcastDelivery,
+  broadcast: Broadcast,
+  now = jstNow(),
+): Promise<void> {
+  await db.batch([
+    db
+      .prepare(
+        `UPDATE broadcast_deliveries
+         SET status = 'sent', sent_at = ?, last_error = NULL, updated_at = ?
+         WHERE id = ?`,
+      )
+      .bind(now, now, delivery.id),
+    db
+      .prepare(
+        `INSERT INTO messages_log
+           (id, friend_id, direction, message_type, content, broadcast_id,
+            scenario_step_id, source, created_at)
+         VALUES (?, ?, 'outgoing', ?, ?, ?, NULL, 'broadcast', ?)`,
+      )
+      .bind(
+        crypto.randomUUID(),
+        delivery.friend_id,
+        broadcast.message_type,
+        broadcast.message_content,
+        broadcast.id,
+        now,
+      ),
+  ]);
+}
+
+export async function getBroadcastDeliveryCounts(
+  db: D1Database,
+  broadcastId: string,
+): Promise<{
+  totalCount: number;
+  sentCount: number;
+  manualReviewCount: number;
+}> {
+  const row = await db
+    .prepare(
+      `SELECT COUNT(*) AS total_count,
+              SUM(CASE WHEN status = 'sent' THEN 1 ELSE 0 END) AS sent_count,
+              SUM(CASE WHEN status = 'manual_review' THEN 1 ELSE 0 END) AS manual_review_count
+       FROM broadcast_deliveries
+       WHERE broadcast_id = ?`,
+    )
+    .bind(broadcastId)
+    .first<{
+      total_count: number;
+      sent_count: number | null;
+      manual_review_count: number | null;
+    }>();
+  return {
+    totalCount: row?.total_count ?? 0,
+    sentCount: row?.sent_count ?? 0,
+    manualReviewCount: row?.manual_review_count ?? 0,
+  };
+}
+
 export async function recoverStalledBroadcasts(db: D1Database): Promise<void> {
   await db
     .prepare(
-      `UPDATE broadcasts SET batch_offset = 0
-       WHERE status = 'sending' AND batch_offset = -1
-       AND sent_at IS NULL AND success_count = 0
-       AND segment_conditions IS NOT NULL
-       AND julianday('now', '+9 hours') - julianday(created_at) > 0.021`,
+      `UPDATE broadcasts
+       SET batch_offset = COALESCE(
+             (SELECT COUNT(*)
+              FROM broadcast_deliveries d
+              WHERE d.broadcast_id = broadcasts.id AND d.status = 'sent'),
+             0
+           ),
+           success_count = COALESCE(
+             (SELECT COUNT(*)
+              FROM broadcast_deliveries d
+              WHERE d.broadcast_id = broadcasts.id AND d.status = 'sent'),
+             0
+           ),
+           queue_locked_at = NULL
+       WHERE status = 'sending'
+         AND sent_at IS NULL
+         AND segment_conditions IS NOT NULL
+         AND queue_locked_at IS NOT NULL
+         AND julianday('now', '+9 hours') - julianday(queue_locked_at) > 0.021`,
     )
     .run();
-  // 0.021 日 ≈ 30分
 }
 
 export async function updateBroadcastBatchProgress(
@@ -316,12 +540,23 @@ export async function updateBroadcastBatchProgress(
   id: string,
   batchOffset: number,
   additionalSuccess: number,
+  releaseLock = false,
 ): Promise<void> {
   await db
     .prepare(
-      `UPDATE broadcasts SET batch_offset = ?, success_count = success_count + ? WHERE id = ?`,
+      `UPDATE broadcasts
+       SET batch_offset = ?,
+           success_count = success_count + ?,
+           queue_locked_at = CASE WHEN ? = 1 THEN NULL ELSE ? END
+       WHERE id = ?`,
     )
-    .bind(batchOffset, additionalSuccess, id)
+    .bind(
+      batchOffset,
+      additionalSuccess,
+      releaseLock ? 1 : 0,
+      jstNow(),
+      id,
+    )
     .run();
 }
 

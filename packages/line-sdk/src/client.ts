@@ -10,6 +10,11 @@ import type {
 } from './types.js';
 
 const LINE_API_BASE = 'https://api.line.me';
+const HEX_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+interface RequestOptions {
+  retryKey?: string;
+}
 
 export class LineClient {
   constructor(private readonly channelAccessToken: string) {}
@@ -20,8 +25,13 @@ export class LineClient {
     method: string,
     path: string,
     body?: unknown,
+    requestOptions?: RequestOptions,
   ): Promise<{ data: unknown; headers: Headers }> {
     const url = `${LINE_API_BASE}${path}`;
+    const retryKey = requestOptions?.retryKey;
+    if (retryKey && !HEX_UUID_RE.test(retryKey)) {
+      throw new Error('X-Line-Retry-Key must be a hexadecimal UUID');
+    }
 
     const options: RequestInit = {
       method,
@@ -30,12 +40,25 @@ export class LineClient {
         Authorization: `Bearer ${this.channelAccessToken}`,
       },
     };
+    if (retryKey) {
+      (options.headers as Record<string, string>)['X-Line-Retry-Key'] = retryKey;
+    }
 
     if (method !== 'GET' && method !== 'DELETE' && body !== undefined) {
       options.body = JSON.stringify(body);
     }
 
     const res = await fetch(url, options);
+
+    if (res.status === 409 && retryKey) {
+      return {
+        data: {
+          acceptedRequestId: res.headers.get('x-line-accepted-request-id'),
+          retryAccepted: true,
+        },
+        headers: res.headers,
+      };
+    }
 
     if (!res.ok) {
       const text = await res.text().catch(() => '');
@@ -68,9 +91,18 @@ export class LineClient {
 
   // ─── Messaging ───────────────────────────────────────────────────────────
 
-  async pushMessage(to: string, messages: Message[]): Promise<unknown> {
+  async pushMessage(
+    to: string,
+    messages: Message[],
+    retryKey?: string,
+  ): Promise<unknown> {
     const body: PushMessageRequest = { to, messages };
-    const { data } = await this.request('POST', '/v2/bot/message/push', body);
+    const { data } = await this.request(
+      'POST',
+      '/v2/bot/message/push',
+      body,
+      { retryKey },
+    );
     return data;
   }
 
@@ -78,6 +110,7 @@ export class LineClient {
     to: string[],
     messages: Message[],
     customAggregationUnits?: string[],
+    retryKey?: string,
   ): Promise<{ data: unknown; requestId: string | null }> {
     const body: Record<string, unknown> = { to, messages };
     if (customAggregationUnits) {
@@ -87,8 +120,14 @@ export class LineClient {
       'POST',
       '/v2/bot/message/multicast',
       body,
+      { retryKey },
     );
-    return { data, requestId: headers.get('x-line-request-id') };
+    return {
+      data,
+      requestId:
+        headers.get('x-line-request-id') ??
+        headers.get('x-line-accepted-request-id'),
+    };
   }
 
   async broadcast(
