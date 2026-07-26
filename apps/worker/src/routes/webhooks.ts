@@ -44,7 +44,7 @@ webhooks.post('/api/webhooks/incoming', async (c) => {
     const body = await c.req.json<{ name: string; sourceType?: string; secret?: string }>();
     if (!body.name) return c.json({ success: false, error: 'name is required' }, 400);
     const item = await createIncomingWebhook(c.env.DB, body);
-    return c.json({ success: true, data: { id: item.id, name: item.name, sourceType: item.source_type, isActive: Boolean(item.is_active), createdAt: item.created_at } }, 201);
+    return c.json({ success: true, data: { id: item.id, name: item.name, sourceType: item.source_type, hasSecret: Boolean(item.secret), isActive: Boolean(item.is_active), createdAt: item.created_at } }, 201);
   } catch (err) {
     console.error('POST /api/webhooks/incoming error:', err);
     return c.json({ success: false, error: 'Internal server error' }, 500);
@@ -58,7 +58,7 @@ webhooks.put('/api/webhooks/incoming/:id', async (c) => {
     await updateIncomingWebhook(c.env.DB, id, body);
     const updated = await getIncomingWebhookById(c.env.DB, id);
     if (!updated) return c.json({ success: false, error: 'Not found' }, 404);
-    return c.json({ success: true, data: { id: updated.id, name: updated.name, sourceType: updated.source_type, isActive: Boolean(updated.is_active) } });
+    return c.json({ success: true, data: { id: updated.id, name: updated.name, sourceType: updated.source_type, hasSecret: Boolean(updated.secret), isActive: Boolean(updated.is_active) } });
   } catch (err) {
     console.error('PUT /api/webhooks/incoming/:id error:', err);
     return c.json({ success: false, error: 'Internal server error' }, 500);
@@ -106,7 +106,7 @@ webhooks.post('/api/webhooks/outgoing', async (c) => {
     const item = await createOutgoingWebhook(c.env.DB, { ...body, eventTypes: body.eventTypes ?? [] });
     return c.json({
       success: true,
-      data: { id: item.id, name: item.name, url: item.url, eventTypes: JSON.parse(item.event_types), isActive: Boolean(item.is_active), createdAt: item.created_at },
+      data: { id: item.id, name: item.name, url: item.url, eventTypes: JSON.parse(item.event_types), hasSecret: Boolean(item.secret), isActive: Boolean(item.is_active), createdAt: item.created_at },
     }, 201);
   } catch (err) {
     console.error('POST /api/webhooks/outgoing error:', err);
@@ -121,7 +121,7 @@ webhooks.put('/api/webhooks/outgoing/:id', async (c) => {
     await updateOutgoingWebhook(c.env.DB, id, body);
     const updated = await getOutgoingWebhookById(c.env.DB, id);
     if (!updated) return c.json({ success: false, error: 'Not found' }, 404);
-    return c.json({ success: true, data: { id: updated.id, name: updated.name, url: updated.url, eventTypes: JSON.parse(updated.event_types), isActive: Boolean(updated.is_active) } });
+    return c.json({ success: true, data: { id: updated.id, name: updated.name, url: updated.url, eventTypes: JSON.parse(updated.event_types), hasSecret: Boolean(updated.secret), isActive: Boolean(updated.is_active) } });
   } catch (err) {
     console.error('PUT /api/webhooks/outgoing/:id error:', err);
     return c.json({ success: false, error: 'Internal server error' }, 500);

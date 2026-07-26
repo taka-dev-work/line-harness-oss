@@ -9,6 +9,7 @@ import type { Env } from '../index.js';
 import { verifySharedSecret } from '../services/webhook-auth.js';
 
 const stripe = new Hono<Env>();
+const STRIPE_SIGNATURE_TOLERANCE_MS = 300_000;
 
 interface StripeWebhookBody {
   id: string;
@@ -55,7 +56,12 @@ stripe.get('/api/integrations/stripe/events', async (c) => {
 // ========== Stripe Webhookレシーバー ==========
 
 /** Stripe署名検証 */
-async function verifyStripeSignature(secret: string, rawBody: string, sigHeader: string): Promise<boolean> {
+export async function verifyStripeSignature(
+  secret: string,
+  rawBody: string,
+  sigHeader: string,
+  now: () => number = Date.now,
+): Promise<boolean> {
   // Stripe署名形式: t=timestamp,v1=signature
   const parts = Object.fromEntries(
     sigHeader.split(',').map((p) => {
@@ -65,7 +71,11 @@ async function verifyStripeSignature(secret: string, rawBody: string, sigHeader:
   );
   const timestamp = parts.t;
   const expectedSig = parts.v1;
-  if (!timestamp || !expectedSig) return false;
+  if (!timestamp || !expectedSig || !/^\d+$/.test(timestamp)) return false;
+
+  const timestampSeconds = Number(timestamp);
+  if (!Number.isSafeInteger(timestampSeconds)) return false;
+  if (Math.abs(now() - timestampSeconds * 1_000) > STRIPE_SIGNATURE_TOLERANCE_MS) return false;
 
   const encoder = new TextEncoder();
   const signedPayload = `${timestamp}.${rawBody}`;

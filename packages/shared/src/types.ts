@@ -399,7 +399,7 @@ export interface IncomingWebhook {
   id: string;
   name: string;
   sourceType: string;
-  secret: string | null;
+  hasSecret: boolean;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
@@ -414,7 +414,7 @@ export interface OutgoingWebhook {
   name: string;
   url: string;
   eventTypes: string[];
-  secret: string | null;
+  hasSecret: boolean;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
