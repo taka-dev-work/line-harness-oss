@@ -46,6 +46,14 @@ describe("refreshExistingMcpConfig", () => {
           unrelated: {
             command: "other-command",
           },
+          "same-worker-other-mcp": {
+            command: "npx",
+            args: ["-y", "@example/other-mcp"],
+            env: {
+              LINE_HARNESS_API_URL: workerUrl,
+              LINE_HARNESS_API_KEY: "other-mcp-key",
+            },
+          },
         },
       }),
     );
@@ -56,10 +64,20 @@ describe("refreshExistingMcpConfig", () => {
       mcpJsonPath,
     });
     const config = JSON.parse(readFileSync(mcpJsonPath, "utf8")) as {
-      mcpServers: Record<string, { env?: Record<string, string> }>;
+      mcpServers: Record<
+        string,
+        {
+          command?: string;
+          args?: string[];
+          env?: Record<string, string>;
+        }
+      >;
     };
     const matchingEntries = Object.entries(config.mcpServers).filter(
-      ([, server]) => server.env?.LINE_HARNESS_API_URL === workerUrl,
+      ([, server]) =>
+        server.command === "npx" &&
+        server.args?.includes("@line-harness/mcp-server@latest") &&
+        server.env?.LINE_HARNESS_API_URL === workerUrl,
     );
 
     expect(refreshed).toBe(true);
@@ -76,6 +94,14 @@ describe("refreshExistingMcpConfig", () => {
     ]);
     expect(config.mcpServers.unrelated).toEqual({
       command: "other-command",
+    });
+    expect(config.mcpServers["same-worker-other-mcp"]).toEqual({
+      command: "npx",
+      args: ["-y", "@example/other-mcp"],
+      env: {
+        LINE_HARNESS_API_URL: workerUrl,
+        LINE_HARNESS_API_KEY: "other-mcp-key",
+      },
     });
   });
 });

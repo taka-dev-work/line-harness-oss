@@ -70,6 +70,12 @@ function matchingServerNames(
   return Object.entries(servers)
     .filter(
       ([, server]) =>
+        server.command === "npx" &&
+        server.args?.some(
+          (arg) =>
+            arg === "@line-harness/mcp-server" ||
+            arg.startsWith("@line-harness/mcp-server@"),
+        ) === true &&
         typeof server.env?.LINE_HARNESS_API_URL === "string" &&
         normalizeWorkerUrl(server.env.LINE_HARNESS_API_URL) ===
           normalizedWorkerUrl,
