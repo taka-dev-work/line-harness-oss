@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased (2026-07-27)
+
+### New Features
+- LINEアカウント別AIコンシェルジュを追加
+- OpenAI、Anthropic、Geminiの優先順位設定と自動フォールバックを追加
+- サービス情報、FAQ、関連性テスト、安全な利用ログを管理する画面を追加
+- 無関係な質問をWorker内で終了し、AIプロバイダーを呼び出さないローカル判定を追加
+
+### Security
+- 公開フォームの更新・削除を管理者認証で保護
+- 外部Webhook、Meet callback、Stripe webhookをSecret未設定時に閉鎖
+- クロスアカウント配信、キュー再実行、保存済み予約HTMLの安全性を強化
+- AIログからメッセージ本文、プロンプト、秘密情報を除外
+
 ## v0.2.0 (2026-03-25)
 
 ### Breaking Changes

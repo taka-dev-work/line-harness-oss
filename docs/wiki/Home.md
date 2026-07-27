@@ -31,6 +31,7 @@ LINE Harness は、LINE公式アカウント向けのオープンソース CRM /
 | Stripe連携 | 決済イベント連携（テーブル準備済み） |
 | BANモニタリング | アカウントヘルスチェック |
 | スタッフ管理 | owner/admin/staffの3ロール権限制御、APIキー個別発行 |
+| AIコンシェルジュ | サービス関連質問だけをローカル判定後にマルチAIで回答 |
 
 ## 技術スタック
 
@@ -104,6 +105,7 @@ LINE Harness は、LINE公式アカウント向けのオープンソース CRM /
 21. **[Operations](22-Operations.md)** — 運用、監視、トラブルシューティング
 22. **[Claude Code Integration](23-Claude-Code-Integration.md)** — AI連携、プロンプト例
 23. **[MCP Server](24-MCP-Server.md)** — MCP Server セットアップ、ツール一覧、URL自動追跡
+24. **[AI Concierge](26-AI-Concierge.md)** — マルチAI設定、ゼロトークン判定、安全な運用
 
 ## D1テーブル一覧（42テーブル）
 

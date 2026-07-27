@@ -141,6 +141,10 @@ CLI が以下を全部やる:
 - **トラフィックプール** — 複数アカウントへ自動振り分け
 
 ### AI 統合
+- **AIコンシェルジュ** — 登録したサービス情報に関係する質問だけを OpenAI / Anthropic / Gemini へ送信
+  - Worker内のローカル判定により、無関係な質問はAI APIを呼ばず固定文で終了
+  - LINEアカウント単位のサービス情報、FAQ、プロバイダー優先順位、利用ログ
+  - 初期状態は無効。Secretとサービス知識を設定してから管理画面で有効化
 - **MCP Server 同梱** (`@line-harness/mcp-server`) — Claude Code から自然言語で全操作
   - `list_conversations` / `get_conversation` — 未返信会話の AI 監視
   - `create_scenario` / `update_step` — シナリオを AI に作らせる
@@ -179,6 +183,7 @@ CLI が以下を全部やる:
 ## ドキュメント
 
 - [セットアップガイド (動画)](https://youtu.be/DiRuGaeq1sM)
+- [AIコンシェルジュ運用ガイド](docs/wiki/26-AI-Concierge.md)
 - [LINE で無料体験する](https://shudesu.github.io/line-harness-oss/)
 - [npm: @line-harness/sdk](https://www.npmjs.com/package/@line-harness/sdk)
 - [npm: @line-harness/mcp-server](https://www.npmjs.com/package/@line-harness/mcp-server)
