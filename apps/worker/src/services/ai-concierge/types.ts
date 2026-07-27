@@ -33,3 +33,29 @@ export interface RelevanceDecision {
   matchedTerms: string[];
   normalizedMessage: string;
 }
+
+export type AiProviderName = 'openai' | 'anthropic' | 'gemini';
+
+export interface ConciergeMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
+export interface ConciergePrompt {
+  system: string;
+  messages: ConciergeMessage[];
+}
+
+export interface AiResult {
+  text: string;
+  provider: AiProviderName;
+  model: string;
+  inputTokens?: number;
+  outputTokens?: number;
+}
+
+export interface AiProvider {
+  readonly name: AiProviderName;
+  readonly available: boolean;
+  generate(prompt: ConciergePrompt, signal?: AbortSignal): Promise<AiResult>;
+}

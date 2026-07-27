@@ -9,6 +9,11 @@ workers_dev = true
 # ═══════════════════════════════════════════════════════════════
 account_id = "YOUR_DEV_ACCOUNT_ID"
 
+[vars]
+OPENAI_MODEL = "gpt-5-mini"
+ANTHROPIC_MODEL = "claude-sonnet-5"
+GEMINI_MODEL = "gemini-3.6-flash"
+
 [assets]
 directory = "dist/client"
 binding = "ASSETS"
@@ -34,6 +39,11 @@ crons = ["*/5 * * * *"]
 [env.production]
 name = "ai-line-crm"
 account_id = "YOUR_PROD_ACCOUNT_ID"
+
+[env.production.vars]
+OPENAI_MODEL = "gpt-5-mini"
+ANTHROPIC_MODEL = "claude-sonnet-5"
+GEMINI_MODEL = "gemini-3.6-flash"
 
 [env.production.assets]
 directory = "../web/out"

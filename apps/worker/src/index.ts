@@ -70,7 +70,12 @@ export type Env = {
     X_HARNESS_URL?: string;  // Optional: X Harness API URL for account linking
     IG_HARNESS_URL?: string;  // Optional: IG Harness API URL for cross-platform linking
     IG_HARNESS_LINK_SECRET?: string;  // Shared secret for IG Harness link-line webhook
+    OPENAI_API_KEY?: string;
+    OPENAI_MODEL?: string;
+    ANTHROPIC_API_KEY?: string;
+    ANTHROPIC_MODEL?: string;
     GEMINI_API_KEY?: string;
+    GEMINI_MODEL?: string;
     GOOGLE_SERVICE_ACCOUNT_EMAIL?: string;
     GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY?: string;
     GOOGLE_CALENDAR_ID?: string;
