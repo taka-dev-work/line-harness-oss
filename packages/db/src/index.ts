@@ -27,6 +27,7 @@ export * from './traffic-pools';
 export * from './message-templates';
 export * from './booking';
 export * from './diagnosis';
+export * from './ai-concierge';
 
 /**
  * Thin wrapper around D1Database.
