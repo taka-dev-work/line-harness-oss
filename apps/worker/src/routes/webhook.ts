@@ -16,6 +16,7 @@ import {
 } from '@line-crm/db';
 import { fireEvent } from '../services/event-bus.js';
 import { buildMessage, expandVariables } from '../services/step-delivery.js';
+import { handleConciergeMessage } from '../services/ai-concierge/handler.js';
 import type { Env } from '../index.js';
 
 const webhook = new Hono<Env>();
@@ -66,7 +67,7 @@ webhook.post('/webhook', async (c) => {
   const processingPromise = (async () => {
     for (const event of body.events) {
       try {
-        await handleEvent(db, lineClient, event, channelAccessToken, matchedAccountId, c.env.WORKER_URL || new URL(c.req.url).origin, c.env.LIFF_URL);
+        await handleEvent(db, lineClient, event, channelAccessToken, matchedAccountId, c.env.WORKER_URL || new URL(c.req.url).origin, c.env.LIFF_URL, c.env);
       } catch (err) {
         console.error('Error handling webhook event:', err);
       }
@@ -86,6 +87,7 @@ async function handleEvent(
   lineAccountId: string | null = null,
   workerUrl?: string,
   liffUrl?: string,
+  env?: Env['Bindings'],
 ): Promise<void> {
   if (event.type === 'follow') {
     const userId =
@@ -342,16 +344,17 @@ async function handleEvent(
 
     const incomingText = textMessage.text;
     const now = jstNow();
-    const logId = crypto.randomUUID();
+    const logId = `line-webhook:${event.webhookEventId || textMessage.id}`;
 
-    // 受信メッセージをログに記録
-    await db
+    // Claim the LINE event before any reply. Redeliveries reuse webhookEventId.
+    const incomingLog = await db
       .prepare(
-        `INSERT INTO messages_log (id, friend_id, direction, message_type, content, broadcast_id, scenario_step_id, source, created_at)
+        `INSERT OR IGNORE INTO messages_log (id, friend_id, direction, message_type, content, broadcast_id, scenario_step_id, source, created_at)
          VALUES (?, ?, 'incoming', 'text', ?, NULL, NULL, 'user', ?)`,
       )
       .bind(logId, friend.id, incomingText, now)
       .run();
+    if (incomingLog.meta?.changes === 0) return;
 
     // 受信したユーザー発言は、自動返信にマッチするかどうかに関係なく個別チャットへ同期する。
     // これにより「AI診断」「予約」「質問」などの自動返信付き発言も管理画面で追える。
@@ -514,6 +517,39 @@ async function handleEvent(
 
         matched = true;
         break;
+      }
+    }
+
+    const conciergeAccountId = lineAccountId
+      ?? (friend as unknown as { line_account_id?: string | null }).line_account_id
+      ?? null;
+    if (!matched && conciergeAccountId) {
+      try {
+        const concierge = await handleConciergeMessage({
+          db,
+          lineAccountId: conciergeAccountId,
+          friendId: friend.id,
+          message: incomingText,
+          env,
+        });
+        if (concierge.handled) {
+          const messages = concierge.messages.slice(0, 5);
+          await lineClient.replyMessage(
+            event.replyToken,
+            messages.map((text) => ({ type: 'text' as const, text })),
+          );
+          for (const text of messages) {
+            await db.prepare(
+              `INSERT INTO messages_log (
+                id, friend_id, direction, message_type, content,
+                broadcast_id, scenario_step_id, delivery_type, source, created_at
+              ) VALUES (?, ?, 'outgoing', 'text', ?, NULL, NULL, 'reply', 'ai_concierge', ?)`,
+            ).bind(crypto.randomUUID(), friend.id, text, jstNow()).run();
+          }
+          return;
+        }
+      } catch (error) {
+        console.error('AI concierge handling failed:', error);
       }
     }
 
