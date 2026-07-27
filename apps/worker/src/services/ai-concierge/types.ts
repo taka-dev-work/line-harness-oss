@@ -59,3 +59,23 @@ export interface AiProvider {
   readonly available: boolean;
   generate(prompt: ConciergePrompt, signal?: AbortSignal): Promise<AiResult>;
 }
+
+export interface ConciergeSettings {
+  enabled: boolean;
+  serviceName: string;
+  serviceDescription: string;
+  pricing: string;
+  targetAudience: string;
+  relatedUrls: string[];
+  relatedKeywords: string[];
+  providerOrder: AiProviderName[];
+  offTopicMessage: string;
+  providerErrorMessage: string;
+  contextTtlMinutes: number;
+  maxHistoryMessages: number;
+}
+
+export interface ConciergeFaq {
+  question: string;
+  answer: string;
+}
