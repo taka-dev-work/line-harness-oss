@@ -49,6 +49,7 @@ import { messageTemplates } from './routes/message-templates.js';
 import { aiCrmPages } from './routes/ai-crm-pages.js';
 import { booking } from './routes/booking.js';
 import { diagnosis } from './routes/diagnosis.js';
+import { aiConcierge } from './routes/ai-concierge.js';
 
 export type Env = {
   Bindings: {
@@ -137,6 +138,7 @@ app.route('/', messageTemplates);
 app.route('/', aiCrmPages);
 app.route('/', booking);
 app.route('/', diagnosis);
+app.route('/', aiConcierge);
 
 // Self-hosted QR code proxy — prevents leaking ref tokens to third-party services
 app.get('/api/qr', async (c) => {
