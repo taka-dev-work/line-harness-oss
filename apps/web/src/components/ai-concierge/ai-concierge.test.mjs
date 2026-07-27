@@ -7,6 +7,7 @@ const pageSource = readFileSync(new URL('../../app/ai-concierge/page.tsx', impor
 const settingsSource = readFileSync(new URL('./concierge-settings.tsx', import.meta.url), 'utf8')
 const faqSource = readFileSync(new URL('./faq-editor.tsx', import.meta.url), 'utf8')
 const logSource = readFileSync(new URL('./usage-log.tsx', import.meta.url), 'utf8')
+const layoutSource = readFileSync(new URL('../../app/layout.tsx', import.meta.url), 'utf8')
 
 test('every concierge request is scoped by the selected LINE account', () => {
   const block = apiSource.slice(apiSource.indexOf('aiConcierge: {'))
@@ -30,4 +31,8 @@ test('provider status is shown without an API key field', () => {
   assert.match(settingsSource, /未設定/)
   assert.doesNotMatch(settingsSource, /API_KEY|apiKey|type="password"/)
   assert.doesNotMatch(pageSource, /API_KEY|apiKey|type="password"/)
+})
+
+test('root layout tolerates attributes injected by browser extensions', () => {
+  assert.match(layoutSource, /<body\s+suppressHydrationWarning/)
 })
