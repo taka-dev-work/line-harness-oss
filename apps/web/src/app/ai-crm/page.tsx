@@ -1,10 +1,11 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { api, fetchApi } from '@/lib/api'
 import { useAccount } from '@/contexts/account-context'
 import type { ApiResponse, Scenario, Tag, Automation } from '@line-crm/shared'
+import type { AiCrmPageConfig } from '@/lib/api'
 
 type FormItem = {
   id: string
@@ -21,6 +22,14 @@ type AutoReplyItem = {
   isActive: boolean
 }
 
+type GuideAsset = {
+  id: string
+  title: string
+  filename: string
+  url: string
+  size: number
+}
+
 type CrmSnapshot = {
   friendCount: number | null
   tags: Tag[]
@@ -28,6 +37,14 @@ type CrmSnapshot = {
   automations: Automation[]
   forms: FormItem[]
   autoReplies: AutoReplyItem[]
+}
+
+const defaultGuideConfig: AiCrmPageConfig = {
+  title: 'AI活用ガイド',
+  lead: 'AIを仕事で使える形にするための無料ガイド一覧です。',
+  items: ['ChatGPT実務活用スタートガイド', 'AI業務分解チェックリスト', 'AIエージェント導入前チェックリスト', '30日AI活用ロードマップ'],
+  cta: '相談フォームへ進む',
+  ctaPath: '/ai-crm/consult',
 }
 
 const requiredTags = [
@@ -131,6 +148,10 @@ export default function AiCrmDashboardPage() {
   })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [guideConfig, setGuideConfig] = useState<AiCrmPageConfig>(defaultGuideConfig)
+  const [guideAssets, setGuideAssets] = useState<GuideAsset[]>([])
+  const [guideSaving, setGuideSaving] = useState(false)
+  const [guideMessage, setGuideMessage] = useState('')
 
   useEffect(() => {
     const load = async () => {
@@ -166,6 +187,91 @@ export default function AiCrmDashboardPage() {
 
     load()
   }, [selectedAccountId])
+
+  const loadGuideSettings = useCallback(async () => {
+    try {
+      const [pageRes, assetRes] = await Promise.all([api.aiCrmPages.get('guide'), api.guideAssets.list()])
+      if (pageRes.success) setGuideConfig(pageRes.data)
+      if (assetRes.success) setGuideAssets(assetRes.data)
+    } catch {
+      setGuideMessage('ガイド設定の読み込みに失敗しました')
+    }
+  }, [])
+
+  useEffect(() => {
+    loadGuideSettings()
+  }, [loadGuideSettings])
+
+  const saveGuideConfig = async () => {
+    setGuideSaving(true)
+    setGuideMessage('')
+    try {
+      const normalized = {
+        ...guideConfig,
+        items: guideConfig.items.map((item) => item.trim()).filter(Boolean),
+      }
+      const res = await api.aiCrmPages.update('guide', normalized)
+      if (!res.success) {
+        setGuideMessage(res.error)
+        return
+      }
+      setGuideConfig(res.data)
+      setGuideMessage('ガイドページへ反映しました')
+    } catch {
+      setGuideMessage('ガイドページの保存に失敗しました')
+    } finally {
+      setGuideSaving(false)
+    }
+  }
+
+  const uploadGuidePdf = async (file: File | null) => {
+    if (!file) return
+    setGuideSaving(true)
+    setGuideMessage('')
+    try {
+      const data = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = () => resolve(String(reader.result))
+        reader.onerror = () => reject(reader.error)
+        reader.readAsDataURL(file)
+      })
+      const res = await api.guideAssets.upload({
+        title: file.name.replace(/\.pdf$/i, ''),
+        filename: file.name,
+        mimeType: file.type || 'application/pdf',
+        data,
+      })
+      if (!res.success) {
+        setGuideMessage(res.error)
+        return
+      }
+      await loadGuideSettings()
+      setGuideMessage('PDFをガイドページへ追加しました')
+    } catch {
+      setGuideMessage('PDFアップロードに失敗しました')
+    } finally {
+      setGuideSaving(false)
+    }
+  }
+
+  const deleteGuideAsset = async (id: string) => {
+    if (!confirm('このPDFをガイドページから外してもよいですか？')) return
+    setGuideSaving(true)
+    setGuideMessage('')
+    try {
+      const res = await api.guideAssets.delete(id)
+      if (!res.success) {
+        setGuideMessage(res.error)
+        return
+      }
+      await loadGuideSettings()
+      setGuideMessage('PDFをガイドページから削除しました')
+    } catch {
+      setGuideMessage('PDF削除に失敗しました')
+    } finally {
+      setGuideSaving(false)
+    }
+  }
 
   const computed = useMemo(() => {
     const tagNames = new Set(snapshot.tags.map((tag) => tag.name))
@@ -291,6 +397,116 @@ export default function AiCrmDashboardPage() {
           </div>
         </section>
       </div>
+
+      <section className="rounded-lg border border-slate-200 bg-white p-5">
+        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+          <div>
+            <h2 className="text-lg font-black text-slate-950">ガイドページ設定</h2>
+            <p className="mt-1 text-sm text-slate-500">
+              公開ページ /ai-crm/guide の見出し、説明、掲載項目、CTA、PDFを管理画面から更新します。
+            </p>
+          </div>
+          <Link href="/ai-crm/guide" target="_blank" className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-bold text-slate-800 hover:bg-slate-50">
+            公開ページを確認
+          </Link>
+        </div>
+        <div className="mt-5 grid grid-cols-1 gap-5 lg:grid-cols-[1fr_0.85fr]">
+          <div className="space-y-4">
+            <div>
+              <label className="mb-1 block text-xs font-semibold text-slate-600">タイトル</label>
+              <input
+                value={guideConfig.title}
+                onChange={(event) => setGuideConfig({ ...guideConfig, title: event.target.value })}
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-semibold text-slate-600">説明文</label>
+              <textarea
+                value={guideConfig.lead}
+                onChange={(event) => setGuideConfig({ ...guideConfig, lead: event.target.value })}
+                rows={3}
+                className="w-full resize-y rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-semibold text-slate-600">掲載項目</label>
+              <textarea
+                value={guideConfig.items.join('\n')}
+                onChange={(event) => setGuideConfig({ ...guideConfig, items: event.target.value.split('\n') })}
+                rows={5}
+                className="w-full resize-y rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              />
+            </div>
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-slate-600">CTA文言</label>
+                <input
+                  value={guideConfig.cta}
+                  onChange={(event) => setGuideConfig({ ...guideConfig, cta: event.target.value })}
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-slate-600">CTAリンク</label>
+                <input
+                  value={guideConfig.ctaPath}
+                  onChange={(event) => setGuideConfig({ ...guideConfig, ctaPath: event.target.value })}
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                />
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={saveGuideConfig}
+              disabled={guideSaving}
+              className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-700 disabled:opacity-50"
+            >
+              {guideSaving ? '反映中...' : 'ガイドページへ反映'}
+            </button>
+          </div>
+          <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+            <div className="flex items-center justify-between gap-3">
+              <h3 className="text-sm font-black text-slate-900">掲載PDF</h3>
+              <label className="cursor-pointer rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-100">
+                PDF追加
+                <input
+                  type="file"
+                  accept="application/pdf"
+                  className="sr-only"
+                  onChange={(event) => {
+                    uploadGuidePdf(event.target.files?.[0] ?? null)
+                    event.currentTarget.value = ''
+                  }}
+                />
+              </label>
+            </div>
+            <div className="mt-3 space-y-2">
+              {guideAssets.length === 0 ? (
+                <p className="rounded-lg bg-white p-4 text-sm text-slate-500">追加PDFはありません。静的ガイドPDFは公開ページ側に表示されます。</p>
+              ) : guideAssets.map((asset) => (
+                <div key={asset.id} className="flex items-center justify-between gap-3 rounded-lg bg-white p-3">
+                  <div className="min-w-0">
+                    <a href={asset.url} target="_blank" className="block truncate text-sm font-bold text-slate-900 hover:text-emerald-700">
+                      {asset.title || asset.filename}
+                    </a>
+                    <p className="mt-1 text-xs text-slate-400">{Math.max(1, Math.round(asset.size / 1024))}KB</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => deleteGuideAsset(asset.id)}
+                    disabled={guideSaving}
+                    className="rounded-md bg-red-50 px-3 py-2 text-xs font-bold text-red-600 hover:bg-red-100 disabled:opacity-50"
+                  >
+                    削除
+                  </button>
+                </div>
+              ))}
+            </div>
+            {guideMessage && <p className="mt-3 text-xs font-semibold text-slate-600">{guideMessage}</p>}
+          </div>
+        </div>
+      </section>
 
       <section className="rounded-lg border border-slate-200 bg-white p-5">
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">

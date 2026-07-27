@@ -83,6 +83,41 @@ export type AiConciergeLog = {
   created_at: string
 }
 
+export type FormField = {
+  name: string
+  label: string
+  type: 'text' | 'textarea' | 'select'
+  required?: boolean
+  options?: string[]
+}
+
+export type ManagedForm = {
+  id: string
+  name: string
+  description: string | null
+  fields: FormField[]
+  onSubmitTagId: string | null
+  onSubmitScenarioId: string | null
+  onSubmitMessageType: 'text' | 'flex' | null
+  onSubmitMessageContent: string | null
+  onSubmitWebhookUrl: string | null
+  onSubmitWebhookHeaders: string | null
+  onSubmitWebhookFailMessage: string | null
+  saveToMetadata: boolean
+  isActive: boolean
+  submitCount: number
+  createdAt: string
+  updatedAt: string
+}
+
+export type AiCrmPageConfig = {
+  title: string
+  lead: string
+  items: string[]
+  cta: string
+  ctaPath: string
+}
+
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? ''
 
 /**
@@ -394,6 +429,7 @@ export const api = {
       description?: string | null
       conditions?: Record<string, unknown>
       priority?: number
+      lineAccountId?: string | null
     }) =>
       fetchApi<ApiResponse<Automation>>('/api/automations', {
         method: 'POST',
@@ -410,6 +446,49 @@ export const api = {
       fetchApi<ApiResponse<AutomationLog[]>>(
         `/api/automations/${id}/logs` + (limit ? `?limit=${limit}` : ''),
       ),
+  },
+  forms: {
+    list: () =>
+      fetchApi<ApiResponse<ManagedForm[]>>('/api/forms'),
+    get: (id: string) =>
+      fetchApi<ApiResponse<ManagedForm>>(`/api/forms/${id}`),
+    create: (data: {
+      name: string
+      description?: string | null
+      fields?: FormField[]
+      onSubmitTagId?: string | null
+      onSubmitScenarioId?: string | null
+      onSubmitMessageType?: 'text' | 'flex' | null
+      onSubmitMessageContent?: string | null
+      onSubmitWebhookUrl?: string | null
+      onSubmitWebhookHeaders?: string | null
+      onSubmitWebhookFailMessage?: string | null
+      saveToMetadata?: boolean
+    }) =>
+      fetchApi<ApiResponse<ManagedForm>>('/api/forms', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+    update: (id: string, data: Partial<{
+      name: string
+      description: string | null
+      fields: FormField[]
+      onSubmitTagId: string | null
+      onSubmitScenarioId: string | null
+      onSubmitMessageType: 'text' | 'flex' | null
+      onSubmitMessageContent: string | null
+      onSubmitWebhookUrl: string | null
+      onSubmitWebhookHeaders: string | null
+      onSubmitWebhookFailMessage: string | null
+      saveToMetadata: boolean
+      isActive: boolean
+    }>) =>
+      fetchApi<ApiResponse<ManagedForm>>(`/api/forms/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(data),
+      }),
+    delete: (id: string) =>
+      fetchApi<ApiResponse<null>>(`/api/forms/${id}`, { method: 'DELETE' }),
   },
   autoReplies: {
     list: (params?: { accountId?: string }) => {
@@ -468,6 +547,15 @@ export const api = {
       }),
     delete: (id: string) =>
       fetchApi<ApiResponse<null>>(`/api/ai-crm/guide-assets/${id}`, { method: 'DELETE' }),
+  },
+  aiCrmPages: {
+    get: (slug: string) =>
+      fetchApi<ApiResponse<AiCrmPageConfig>>(`/api/ai-crm/pages/${slug}`),
+    update: (slug: string, data: AiCrmPageConfig) =>
+      fetchApi<ApiResponse<AiCrmPageConfig>>(`/api/ai-crm/pages/${slug}`, {
+        method: 'PUT',
+        body: JSON.stringify(data),
+      }),
   },
   chats: {
     list: (params?: { status?: string; operatorId?: string; accountId?: string }) => {

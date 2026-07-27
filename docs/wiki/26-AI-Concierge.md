@@ -30,6 +30,18 @@ pnpm exec wrangler d1 execute line-crm \
 
 使用するプロバイダーのキーだけをCloudflare Secretへ登録します。値はソースコード、`wrangler.toml`、管理画面へ保存しません。
 
+`.env.production` でまとめて管理する場合は、exampleをコピーして実値を入れてから同期します。
+
+```bash
+cp .env.production.example .env.production
+# .env.production を編集
+pnpm secrets:sync:production
+```
+
+`.env.production` はgit管理外です。同期スクリプトはenvファイルを実行せず、既知のsecret名だけを `wrangler secret put` へ送ります。
+
+個別に登録する場合は次のコマンドを使います。
+
 ```bash
 pnpm exec wrangler secret put OPENAI_API_KEY --config apps/worker/wrangler.toml --env production
 pnpm exec wrangler secret put ANTHROPIC_API_KEY --config apps/worker/wrangler.toml --env production

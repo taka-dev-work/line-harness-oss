@@ -5,6 +5,7 @@ import type { Env } from '../index.js';
 const aiCrmPages = new Hono<Env>();
 const GUIDE_ASSETS_ACCOUNT_ID = 'global';
 const GUIDE_ASSETS_KEY = 'ai_crm_guide_assets';
+const PAGE_CONFIG_KEY_PREFIX = 'ai_crm_page_config:';
 const FILE_BUCKET = 'line-harness-images';
 
 type GuideAsset = {
@@ -16,6 +17,14 @@ type GuideAsset = {
   mimeType: string;
   size: number;
   createdAt: string;
+};
+
+type PageConfig = {
+  title: string;
+  lead: string;
+  items: string[];
+  cta: string;
+  ctaPath: string;
 };
 
 const staticGuidePdfs = [
@@ -49,7 +58,7 @@ const staticGuidePdfs = [
   },
 ];
 
-const pages: Record<string, { title: string; lead: string; items: string[]; cta: string; ctaPath: string }> = {
+const pages: Record<string, PageConfig> = {
   guide: {
     title: 'AI活用ガイド',
     lead: 'AIを仕事で使える形にするための無料ガイド一覧です。',
@@ -160,6 +169,48 @@ async function saveGuideAssets(db: D1Database, assets: GuideAsset[]): Promise<vo
   ).run();
 }
 
+async function getPageConfig(db: D1Database, slug: string): Promise<PageConfig> {
+  const fallback = pages[slug] ?? pages.guide;
+  const row = await db.prepare(
+    'SELECT value FROM account_settings WHERE line_account_id = ? AND key = ?',
+  ).bind(GUIDE_ASSETS_ACCOUNT_ID, `${PAGE_CONFIG_KEY_PREFIX}${slug}`).first<{ value: string }>();
+  if (!row?.value) return fallback;
+  try {
+    const saved = JSON.parse(row.value) as Partial<PageConfig>;
+    return {
+      title: typeof saved.title === 'string' && saved.title.trim() ? saved.title : fallback.title,
+      lead: typeof saved.lead === 'string' && saved.lead.trim() ? saved.lead : fallback.lead,
+      items: Array.isArray(saved.items) && saved.items.length > 0
+        ? saved.items.filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+        : fallback.items,
+      cta: typeof saved.cta === 'string' && saved.cta.trim() ? saved.cta : fallback.cta,
+      ctaPath: typeof saved.ctaPath === 'string' && saved.ctaPath.trim() ? saved.ctaPath : fallback.ctaPath,
+    };
+  } catch {
+    return fallback;
+  }
+}
+
+async function savePageConfig(db: D1Database, slug: string, config: PageConfig): Promise<void> {
+  const id = crypto.randomUUID();
+  const now = new Date(Date.now() + 9 * 60 * 60_000).toISOString().replace('Z', '+09:00');
+  const value = JSON.stringify(config);
+  await db.prepare(
+    `INSERT INTO account_settings (id, line_account_id, key, value, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?)
+     ON CONFLICT (line_account_id, key) DO UPDATE SET value = ?, updated_at = ?`,
+  ).bind(
+    id,
+    GUIDE_ASSETS_ACCOUNT_ID,
+    `${PAGE_CONFIG_KEY_PREFIX}${slug}`,
+    value,
+    now,
+    now,
+    value,
+    now,
+  ).run();
+}
+
 function storageUrl(supabaseUrl: string, key: string): string {
   return `${supabaseUrl}/storage/v1/object/${FILE_BUCKET}/${key}`;
 }
@@ -168,8 +219,7 @@ function publicFileUrl(supabaseUrl: string, key: string): string {
   return `${supabaseUrl}/storage/v1/object/public/${FILE_BUCKET}/${key}`;
 }
 
-function renderPage(origin: string, slug: string, guideAssets: GuideAsset[] = []): string {
-  const page = pages[slug] ?? pages.guide;
+function renderPage(origin: string, slug: string, page: PageConfig, guideAssets: GuideAsset[] = []): string {
   const ctaUrl = new URL(page.ctaPath, origin).toString();
   const items = page.items.map((item) => `<li>${escapeHtml(item)}</li>`).join('');
   const staticAssets: GuideAsset[] = slug === 'guide'
@@ -346,6 +396,35 @@ aiCrmPages.get('/api/ai-crm/guide-assets', async (c) => {
   return c.json({ success: true, data: assets });
 });
 
+aiCrmPages.get('/api/ai-crm/pages/:slug', async (c) => {
+  const slug = c.req.param('slug');
+  const page = await getPageConfig(c.env.DB, slug);
+  return c.json({ success: true, data: page });
+});
+
+aiCrmPages.put('/api/ai-crm/pages/:slug', async (c) => {
+  try {
+    const slug = c.req.param('slug');
+    const fallback = pages[slug] ?? pages.guide;
+    const body = await c.req.json<Partial<PageConfig>>();
+    const items = Array.isArray(body.items)
+      ? body.items.filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+      : fallback.items;
+    const config: PageConfig = {
+      title: body.title?.trim() || fallback.title,
+      lead: body.lead?.trim() || fallback.lead,
+      items: items.length > 0 ? items : fallback.items,
+      cta: body.cta?.trim() || fallback.cta,
+      ctaPath: body.ctaPath?.trim() || fallback.ctaPath,
+    };
+    await savePageConfig(c.env.DB, slug, config);
+    return c.json({ success: true, data: config });
+  } catch (err) {
+    console.error('PUT /api/ai-crm/pages/:slug error:', err);
+    return c.json({ success: false, error: 'ページ設定の保存に失敗しました' }, 500);
+  }
+});
+
 aiCrmPages.post('/api/ai-crm/guide-assets', async (c) => {
   try {
     const body = await c.req.json<{ title?: string; filename?: string; mimeType?: string; data?: string }>();
@@ -413,8 +492,9 @@ aiCrmPages.get('/ai-crm/:slug', async (c) => {
   const forwardedProto = c.req.header('x-forwarded-proto');
   const origin = `${forwardedProto || url.protocol.replace(':', '')}://${url.host}`;
   const slug = c.req.param('slug');
+  const page = await getPageConfig(c.env.DB, slug);
   const guideAssets = slug === 'guide' ? await getGuideAssets(c.env.DB) : [];
-  return c.html(renderPage(origin, slug, guideAssets));
+  return c.html(renderPage(origin, slug, page, guideAssets));
 });
 
 export { aiCrmPages };

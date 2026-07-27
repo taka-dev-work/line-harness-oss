@@ -53,7 +53,7 @@ const eventTypeBadgeColor: Record<AutomationEventType, string> = {
   calendar_booked: 'bg-indigo-100 text-indigo-700',
 }
 
-interface CreateFormState {
+interface AutomationFormState {
   name: string
   description: string
   eventType: AutomationEventType
@@ -62,7 +62,7 @@ interface CreateFormState {
   priority: number
 }
 
-const initialForm: CreateFormState = {
+const initialForm: AutomationFormState = {
   name: '',
   description: '',
   eventType: 'friend_add',
@@ -70,6 +70,48 @@ const initialForm: CreateFormState = {
   conditionsJson: '{}',
   priority: 0,
 }
+
+const automationExamples: Array<{
+  title: string
+  description: string
+  eventType: AutomationEventType
+  conditions: Record<string, unknown>
+  actions: AutomationAction[]
+}> = [
+  {
+    title: '友だち追加時にタグ付け',
+    description: '新規登録した友だちへ初回タグを付けます。',
+    eventType: 'friend_add',
+    conditions: {},
+    actions: [{ type: 'add_tag', params: { tagId: 'tag-id' } }],
+  },
+  {
+    title: 'スコア到達で商談候補化',
+    description: 'スコアが一定以上になった友だちを営業フォロー対象にします。',
+    eventType: 'score_threshold',
+    conditions: { score: 70, operator: '>=' },
+    actions: [
+      { type: 'add_tag', params: { tagId: 'deal-tag-id' } },
+      { type: 'send_message', params: { text: 'ご相談内容を確認しました。担当者よりご案内します。' } },
+    ],
+  },
+  {
+    title: '相談フォーム送信後に外部通知',
+    description: 'CV発火時にWebhookへ通知し、必要ならタグやシナリオへつなげます。',
+    eventType: 'cv_fire',
+    conditions: { conversionPointId: 'conversion-point-id' },
+    actions: [{ type: 'send_webhook', params: { url: 'https://example.com/webhook' } }],
+  },
+]
+
+const actionDescriptions = [
+  { type: 'add_tag', label: 'タグを付ける', note: '分類、商談候補化、興味カテゴリ付けに使います。' },
+  { type: 'remove_tag', label: 'タグを外す', note: '古い状態タグを外して、最新状態に寄せます。' },
+  { type: 'start_scenario', label: 'シナリオ開始', note: '7日間配信やフォロー配信へ自動で入れます。' },
+  { type: 'send_message', label: 'メッセージ送信', note: '条件に合った友だちへ即時案内を返します。' },
+  { type: 'send_webhook', label: '外部Webhook通知', note: 'Slack、CRM、スプレッドシート連携の入口にできます。' },
+  { type: 'switch_rich_menu', label: 'リッチメニュー切替', note: '興味やステージ別にLINEメニューを変えます。' },
+]
 
 const ccPrompts = [
   {
@@ -96,7 +138,8 @@ export default function AutomationsPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [showCreate, setShowCreate] = useState(false)
-  const [form, setForm] = useState<CreateFormState>({ ...initialForm })
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [form, setForm] = useState<AutomationFormState>({ ...initialForm })
   const [saving, setSaving] = useState(false)
   const [formError, setFormError] = useState('')
 
@@ -150,7 +193,45 @@ export default function AutomationsPage() {
     }
   }, [selectedAccountId, accountLoading])
 
-  const handleCreate = async () => {
+  const applyExample = (example: typeof automationExamples[number]) => {
+    setForm((current) => ({
+      ...current,
+      eventType: example.eventType,
+      conditionsJson: JSON.stringify(example.conditions, null, 2),
+      actionsJson: JSON.stringify(example.actions, null, 2),
+      description: current.description || example.description,
+    }))
+  }
+
+  const startCreate = () => {
+    setEditingId(null)
+    setForm({ ...initialForm })
+    setFormError('')
+    setShowCreate(true)
+  }
+
+  const startEdit = (automation: Automation) => {
+    setEditingId(automation.id)
+    setForm({
+      name: automation.name,
+      description: automation.description ?? '',
+      eventType: automation.eventType,
+      actionsJson: JSON.stringify(automation.actions, null, 2),
+      conditionsJson: JSON.stringify(automation.conditions ?? {}, null, 2),
+      priority: automation.priority,
+    })
+    setFormError('')
+    setShowCreate(true)
+  }
+
+  const closeForm = () => {
+    setShowCreate(false)
+    setEditingId(null)
+    setForm({ ...initialForm })
+    setFormError('')
+  }
+
+  const handleSave = async () => {
     if (!form.name.trim()) {
       setFormError('ルール名を入力してください')
       return
@@ -174,23 +255,25 @@ export default function AutomationsPage() {
     setSaving(true)
     setFormError('')
     try {
-      const res = await api.automations.create({
+      const payload = {
         name: form.name,
         description: form.description || null,
         eventType: form.eventType,
         actions: parsedActions,
         conditions: parsedConditions,
         priority: form.priority,
-      })
+      }
+      const res = editingId
+        ? await api.automations.update(editingId, payload)
+        : await api.automations.create({ ...payload, lineAccountId: selectedAccountId })
       if (res.success) {
-        setShowCreate(false)
-        setForm({ ...initialForm })
+        closeForm()
         loadAutomations()
       } else {
         setFormError(res.error)
       }
     } catch {
-      setFormError('作成に失敗しました')
+      setFormError(editingId ? '更新に失敗しました' : '作成に失敗しました')
     } finally {
       setSaving(false)
     }
@@ -221,7 +304,7 @@ export default function AutomationsPage() {
         title="オートメーション"
         action={
           <button
-            onClick={() => setShowCreate(true)}
+            onClick={startCreate}
             className="px-4 py-2 min-h-[44px] text-sm font-medium text-white rounded-lg transition-opacity hover:opacity-90"
             style={{ backgroundColor: '#06C755' }}
           >
@@ -237,11 +320,47 @@ export default function AutomationsPage() {
         </div>
       )}
 
+      <section className="mb-6 rounded-lg border border-slate-200 bg-white p-5">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <h2 className="text-sm font-semibold text-slate-900">自動化でできること</h2>
+            <p className="mt-1 text-sm leading-6 text-slate-500">
+              「いつ起きたら」「どの条件なら」「何をするか」を組み合わせます。たとえば、友だち追加時のタグ付け、スコア到達時の商談候補化、フォーム送信後のWebhook通知ができます。
+            </p>
+          </div>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:w-[520px]">
+            {actionDescriptions.map((action) => (
+              <div key={action.type} className="rounded-lg border border-slate-100 bg-slate-50 p-3">
+                <p className="text-xs font-bold text-slate-900">{action.label}</p>
+                <p className="mt-1 text-xs leading-5 text-slate-500">{action.note}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
       {/* Create form */}
       {showCreate && (
         <div className="mb-6 bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <h2 className="text-sm font-semibold text-gray-800 mb-4">新規オートメーションを作成</h2>
+          <h2 className="text-sm font-semibold text-gray-800 mb-4">
+            {editingId ? 'オートメーションを編集' : '新規オートメーションを作成'}
+          </h2>
           <div className="space-y-4 max-w-lg">
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+              <p className="text-xs font-semibold text-slate-700">テンプレート</p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {automationExamples.map((example) => (
+                  <button
+                    key={example.title}
+                    type="button"
+                    onClick={() => applyExample(example)}
+                    className="rounded-md border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-700 hover:border-green-300 hover:text-green-700"
+                  >
+                    {example.title}
+                  </button>
+                ))}
+              </div>
+            </div>
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">ルール名 <span className="text-red-500">*</span></label>
               <input
@@ -308,15 +427,15 @@ export default function AutomationsPage() {
 
             <div className="flex gap-2">
               <button
-                onClick={handleCreate}
+                onClick={handleSave}
                 disabled={saving}
                 className="px-4 py-2 min-h-[44px] text-sm font-medium text-white rounded-lg disabled:opacity-50 transition-opacity"
                 style={{ backgroundColor: '#06C755' }}
               >
-                {saving ? '作成中...' : '作成'}
+                {saving ? '保存中...' : editingId ? '更新' : '作成'}
               </button>
               <button
-                onClick={() => { setShowCreate(false); setFormError('') }}
+                onClick={closeForm}
                 className="px-4 py-2 min-h-[44px] text-sm font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
               >
                 キャンセル
@@ -394,6 +513,12 @@ export default function AutomationsPage() {
 
               {/* Actions */}
               <div className="flex items-center justify-end gap-2 pt-2 border-t border-gray-100">
+                <button
+                  onClick={() => startEdit(automation)}
+                  className="px-3 py-1 min-h-[44px] text-xs font-medium text-gray-700 hover:text-gray-900 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors"
+                >
+                  編集
+                </button>
                 <button
                   onClick={() => handleDelete(automation.id)}
                   className="px-3 py-1 min-h-[44px] text-xs font-medium text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 rounded-md transition-colors"
