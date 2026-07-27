@@ -42,6 +42,47 @@ export type BroadcastInsight = {
   fetchedAt?: string | null
 }
 
+export type AiProviderName = 'openai' | 'anthropic' | 'gemini'
+
+export type AiConciergeSettings = {
+  enabled: boolean
+  serviceName: string
+  serviceDescription: string
+  pricing: string
+  targetAudience: string
+  relatedUrls: string[]
+  relatedKeywords: string[]
+  providerOrder: AiProviderName[]
+  offTopicMessage: string
+  providerErrorMessage: string
+  contextTtlMinutes: number
+  maxHistoryMessages: number
+}
+
+export type AiConciergeFaq = {
+  id: string
+  question: string
+  answer: string
+  sortOrder: number
+  active: boolean
+  createdAt?: string
+  updatedAt?: string
+}
+
+export type AiConciergeLog = {
+  id: string
+  decision: 'relevant' | 'off_topic' | 'disabled'
+  provider: AiProviderName | null
+  model: string | null
+  input_tokens: number | null
+  output_tokens: number | null
+  latency_ms: number | null
+  fallback_count: number
+  status: string
+  error_code: string | null
+  created_at: string
+}
+
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? ''
 
 /**
@@ -655,5 +696,46 @@ export const api = {
         method: 'POST',
         body: JSON.stringify({ description }),
       }),
+  },
+  aiConcierge: {
+    settings: (accountId: string) =>
+      fetchApi<ApiResponse<AiConciergeSettings>>(`/api/ai-concierge/settings?lineAccountId=${encodeURIComponent(accountId)}`),
+    saveSettings: (accountId: string, data: AiConciergeSettings) =>
+      fetchApi<ApiResponse<AiConciergeSettings>>(`/api/ai-concierge/settings?lineAccountId=${encodeURIComponent(accountId)}`, {
+        method: 'PUT',
+        body: JSON.stringify(data),
+      }),
+    faqs: (accountId: string) =>
+      fetchApi<ApiResponse<AiConciergeFaq[]>>(`/api/ai-concierge/faqs?lineAccountId=${encodeURIComponent(accountId)}`),
+    createFaq: (accountId: string, data: Omit<AiConciergeFaq, 'id'>) =>
+      fetchApi<ApiResponse<AiConciergeFaq>>(`/api/ai-concierge/faqs?lineAccountId=${encodeURIComponent(accountId)}`, {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+    updateFaq: (accountId: string, id: string, data: Partial<AiConciergeFaq>) =>
+      fetchApi<ApiResponse<AiConciergeFaq>>(`/api/ai-concierge/faqs/${id}?lineAccountId=${encodeURIComponent(accountId)}`, {
+        method: 'PUT',
+        body: JSON.stringify(data),
+      }),
+    deleteFaq: (accountId: string, id: string) =>
+      fetchApi<ApiResponse<null>>(`/api/ai-concierge/faqs/${id}?lineAccountId=${encodeURIComponent(accountId)}`, { method: 'DELETE' }),
+    relevanceTest: (accountId: string, message: string) =>
+      fetchApi<ApiResponse<{
+        relevant: boolean
+        score: number
+        reasonCodes: string[]
+        matchedTerms: string[]
+      }>>(`/api/ai-concierge/relevance-test?lineAccountId=${encodeURIComponent(accountId)}`, {
+        method: 'POST',
+        body: JSON.stringify({ message }),
+      }),
+    logs: (accountId: string, page = 1, pageSize = 20) =>
+      fetchApi<ApiResponse<{ items: AiConciergeLog[]; page: number; pageSize: number; hasMore: boolean }>>(
+        `/api/ai-concierge/logs?lineAccountId=${encodeURIComponent(accountId)}&page=${page}&pageSize=${pageSize}`,
+      ),
+    capabilities: (accountId: string) =>
+      fetchApi<ApiResponse<Record<AiProviderName, boolean>>>(
+        `/api/ai-concierge/capabilities?lineAccountId=${encodeURIComponent(accountId)}`,
+      ),
   },
 }

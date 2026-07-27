@@ -39,6 +39,7 @@ const menuSections = [
   {
     label: '自動化',
     items: [
+      { href: '/ai-concierge', label: 'AIコンシェルジュ', icon: 'M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 4v-4z' },
       { href: '/automations', label: 'オートメーション', icon: 'M13 10V3L4 14h7v7l9-11h-7z' },
       { href: '/mcp', label: 'MCP連携', icon: 'M8.5 8.5l7 7m0-7l-7 7M7 3h10a4 4 0 014 4v10a4 4 0 01-4 4H7a4 4 0 01-4-4V7a4 4 0 014-4z' },
       { href: '/rich-menu-responses', label: 'リッチメニュー応答', icon: 'M4 6h16M4 12h16M4 18h7' },

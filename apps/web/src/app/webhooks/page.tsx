@@ -9,7 +9,7 @@ interface IncomingWebhook {
   id: string
   name: string
   sourceType: string
-  secret: string | null
+  hasSecret: boolean
   isActive: boolean
   createdAt: string
   updatedAt: string
@@ -20,7 +20,7 @@ interface OutgoingWebhook {
   name: string
   url: string
   eventTypes: string[]
-  secret: string | null
+  hasSecret: boolean
   isActive: boolean
   createdAt: string
   updatedAt: string
