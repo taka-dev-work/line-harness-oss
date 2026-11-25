@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import path from 'node:path';
 import process from 'node:process';
+import { adminApiHeaders } from './lib/admin-api-headers.mjs';
 import { fileURLToPath } from 'node:url';
 import {
   argValue,
@@ -79,10 +80,7 @@ async function request(method, endpoint, body) {
 
   const response = await fetch(`${apiUrl}${endpoint}`, {
     method,
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      'Content-Type': 'application/json'
-    },
+    headers: adminApiHeaders({ ...process.env, LINE_HARNESS_API_KEY: apiKey }),
     body: body ? JSON.stringify(body) : undefined
   });
 

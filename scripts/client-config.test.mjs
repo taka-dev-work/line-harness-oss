@@ -100,3 +100,11 @@ test('rejects unknown key inside access', () => {
   const result = validateClientConfig(raw);
   assert.ok(result.errors.includes('unknown key: access.clientSecret'));
 });
+
+test('rejects NEXT_PUBLIC_API_URL so the admin UI calls its own Access-protected origin', () => {
+  const raw = validFixture();
+  raw.build.NEXT_PUBLIC_API_URL = 'https://line.acme.example';
+  const result = validateClientConfig(raw);
+  assert.equal(result.ok, false);
+  assert.ok(result.errors.some((e) => e.includes('build.NEXT_PUBLIC_API_URL must be omitted')), result.errors.join('\n'));
+});

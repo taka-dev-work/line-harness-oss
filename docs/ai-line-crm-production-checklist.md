@@ -85,15 +85,26 @@ CLIENT_CONFIG=path/to/client.json pnpm deploy:client
 1. `API_KEY` で管理画面に入り、スタッフ画面でオーナーを作成する（表示されたキーは一度しか表示されない。パスワードマネージャーへ保存）
 2. 発行されたオーナーキーで入り直し、`API_KEY` では `401` になることを確認する
 3. 旧バージョンからの更新時は、オーナーで `POST /api/staff/rehash-keys` を1回実行し、平文で残っているスタッフキーをハッシュ化する
-4. 全オーナーを無効化・削除すると `API_KEY` が再び有効になる（復旧手段）。通常運用ではオーナーを最低2人にしておく
+4. 通常運用ではオーナーを最低2人にしておく（管理画面からは最後の1人を無効化・削除できない）
+5. **復旧手段**: オーナーキーを全員分失った場合は、Cloudflare の D1 で全オーナーを無効化すると、`API_KEY`（Worker Secret）が再び使えるようになる。このため `API_KEY` の Secret は削除せずに保管しておく
+
+```bash
+node scripts/with-client.mjs --client path/to/client.json -- d1 execute DB --remote --command "UPDATE staff_members SET is_active = 0 WHERE role = 'owner'"
+```
+
+   復旧後はすぐに新しいオーナーを作成し、`API_KEY` が再び `401` になることを確認する
 
 操作の記録（監査ログ）は `audit_logs` テーブルに1年間保存されます。
 
 ## 6. CRM初期データを投入する
 
+管理API は Access 保護下の `adminDomain` にだけ応答するため、5a で作ったサービストークンと、5b で作ったスタッフキー（オーナー等）を使います。環境変数の `API_KEY` は使えません。
+
 ```bash
-LINE_HARNESS_API_URL=https://YOUR_WORKER_DOMAIN \
-LINE_HARNESS_API_KEY=YOUR_API_KEY \
+LINE_HARNESS_API_URL=https://ADMIN_DOMAIN \
+LINE_HARNESS_API_KEY=YOUR_STAFF_API_KEY \
+LINE_HARNESS_ACCESS_CLIENT_ID=YOUR_ACCESS_SERVICE_TOKEN_ID.access \
+LINE_HARNESS_ACCESS_CLIENT_SECRET=YOUR_ACCESS_SERVICE_TOKEN_SECRET \
 pnpm crm:seed:ai-line -- --url-config=config/ai-line-crm.urls.production.json --strict-urls
 ```
 

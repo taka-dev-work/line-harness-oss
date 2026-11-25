@@ -52,3 +52,17 @@ test('docs run the drift check before the first remote migration', () => {
     assert.doesNotMatch(body, /wrangler\.client\.toml/, doc);
   }
 });
+
+test('checklist documents a recovery path that actually works', () => {
+  const body = readFileSync(join(root, 'docs/ai-line-crm-production-checklist.md'), 'utf8');
+  assert.match(body, /UPDATE staff_members SET is_active = 0 WHERE role = 'owner'/);
+  assert.doesNotMatch(body, /全オーナーを無効化・削除すると/);
+});
+
+test('seed scripts use the shared admin API headers', () => {
+  for (const file of ['scripts/apply-ai-line-crm-blueprint.mjs', 'scripts/create-ai-line-crm-test-scenario.mjs']) {
+    const body = readFileSync(join(root, file), 'utf8');
+    assert.match(body, /adminApiHeaders/, file);
+    assert.doesNotMatch(body, /Authorization: `Bearer/, file);
+  }
+});

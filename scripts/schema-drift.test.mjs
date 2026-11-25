@@ -32,3 +32,8 @@ test('ignores d1 bookkeeping tables', () => {
   ];
   assert.deepEqual([...columnsFromRows(rows).keys()], ['friends']);
 });
+
+test('drift is measured against the frozen baseline, not schema.sql', async () => {
+  const { EXPECTED_SCHEMA_FILE } = await import('./lib/schema-drift.mjs');
+  assert.equal(EXPECTED_SCHEMA_FILE, 'packages/db/d1-migrations/0000_baseline.sql');
+});

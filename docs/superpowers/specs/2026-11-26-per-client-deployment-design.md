@@ -87,7 +87,7 @@ Cloudflare アカウントに1環境だけ存在する。デプロイとシー�
   "d1DatabaseId": "…",
   "customDomain": "line.acme.example",
   "release": { "tag": "v0.14.0-nibel.1", "commit": "<40桁SHA>" },
-  "build": { "VITE_LIFF_ID": "…", "VITE_BOT_BASIC_ID": "…", "NEXT_PUBLIC_API_URL": "https://line.acme.example" },
+  "build": { "VITE_LIFF_ID": "…", "VITE_BOT_BASIC_ID": "…" },
   "adminDomain": "admin.acme.example",
   "access": { "teamDomain": "acme.cloudflareaccess.com", "aud": "<64桁のAUDタグ>" }
 }

@@ -1,13 +1,14 @@
 #!/usr/bin/env node
 // Usage: node scripts/check-d1-schema-drift.mjs --client path/to/client.json
-// Compares the remote D1 tables/columns with packages/db/schema.sql. Read-only.
-// Exits 1 when tables or columns defined in schema.sql are missing remotely.
+// Compares the remote D1 tables/columns with the frozen baseline (0000_baseline.sql). Read-only.
+// Exits 1 when baseline tables or columns are missing remotely. Columns added by later
+// migrations are not expected here: `db:migrate:client` adds them.
 import { execFileSync } from 'node:child_process';
 import { mkdtempSync, rmSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { COLUMNS_QUERY, columnsFromRows, tableColumns, diffSchemas } from './lib/schema-drift.mjs';
+import { COLUMNS_QUERY, EXPECTED_SCHEMA_FILE, columnsFromRows, tableColumns, diffSchemas } from './lib/schema-drift.mjs';
 import { clientWranglerInvocation } from './lib/with-client.mjs';
 import { renderWranglerToml } from './lib/render-wrangler.mjs';
 
@@ -33,7 +34,7 @@ const dir = mkdtempSync(join(tmpdir(), 'schema-drift-'));
 let expected;
 try {
   const db = join(dir, 'expected.db');
-  execFileSync('sqlite3', [db], { input: readFileSync(join(root, 'packages/db/schema.sql')) });
+  execFileSync('sqlite3', [db], { input: readFileSync(join(root, EXPECTED_SCHEMA_FILE)) });
   expected = tableColumns(db);
 } finally {
   rmSync(dir, { recursive: true, force: true });
@@ -45,7 +46,7 @@ const diff = diffSchemas(expected, columnsFromRows(rows));
 
 for (const t of diff.missingTables) console.log(`MISSING TABLE  ${t}`);
 for (const c of diff.missingColumns) console.log(`MISSING COLUMN ${c}`);
-for (const t of diff.extraTables) console.log(`extra table    ${t} (not in schema.sql; informational)`);
+for (const t of diff.extraTables) console.log(`extra table    ${t} (not in baseline; informational)`);
 const failed = diff.missingTables.length + diff.missingColumns.length > 0;
-console.log(failed ? 'DRIFT: remote schema is behind schema.sql' : 'OK: remote schema has every table and column in schema.sql');
+console.log(failed ? 'DRIFT: remote schema is behind 0000_baseline.sql' : 'OK: remote schema has every table and column in 0000_baseline.sql');
 process.exit(failed ? 1 : 0);

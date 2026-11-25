@@ -36,5 +36,7 @@ console.log('');
 console.log('Create it after deployment with:');
 console.log('  curl -X POST "$LINE_HARNESS_API_URL/api/rich-menus" \\');
 console.log('    -H "Authorization: Bearer $LINE_HARNESS_API_KEY" \\');
+console.log('    -H "CF-Access-Client-Id: $LINE_HARNESS_ACCESS_CLIENT_ID" \\');
+console.log('    -H "CF-Access-Client-Secret: $LINE_HARNESS_ACCESS_CLIENT_SECRET" \\');
 console.log('    -H "Content-Type: application/json" \\');
 console.log(`    --data @${outPath}`);

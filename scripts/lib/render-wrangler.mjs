@@ -62,5 +62,7 @@ export function renderWranglerToml(input) {
 
 /** @returns {Record<string, string>} build-time env for the admin web build */
 export function renderWebBuildEnv(input) {
-  return { ...assertValid(input).build };
+  // NEXT_PUBLIC_API_URL is pinned to empty (same-origin) so an operator's
+  // apps/web/.env.local (e.g. http://localhost:5173) can never leak into a client build.
+  return { ...assertValid(input).build, NEXT_PUBLIC_API_URL: '' };
 }

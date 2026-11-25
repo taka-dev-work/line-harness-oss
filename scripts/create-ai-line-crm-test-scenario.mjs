@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import process from 'node:process';
+import { adminApiHeaders } from './lib/admin-api-headers.mjs';
 import { argValue } from './ai-line-crm-utils.mjs';
 
 const apiUrl = (argValue('api-url') ?? process.env.LINE_HARNESS_API_URL ?? '').replace(/\/$/, '');
@@ -21,10 +22,7 @@ if (!apiUrl || !apiKey) {
 async function request(method, endpoint, body) {
   const response = await fetch(`${apiUrl}${endpoint}`, {
     method,
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      'Content-Type': 'application/json'
-    },
+    headers: adminApiHeaders({ ...process.env, LINE_HARNESS_API_KEY: apiKey }),
     body: body ? JSON.stringify(body) : undefined
   });
   const text = await response.text();

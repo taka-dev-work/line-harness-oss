@@ -23,7 +23,7 @@ const ACCESS = {
   teamDomain: /^[a-z0-9-]+\.cloudflareaccess\.com$/,
   aud: /^[0-9a-f]{64}$/,
 };
-const BUILD_KEYS = ['VITE_LIFF_ID', 'VITE_BOT_BASIC_ID', 'VITE_CALENDAR_CONNECTION_ID', 'NEXT_PUBLIC_API_URL'];
+const BUILD_KEYS = ['VITE_LIFF_ID', 'VITE_BOT_BASIC_ID', 'VITE_CALENDAR_CONNECTION_ID'];
 const VAR_KEYS = ['OPENAI_MODEL', 'ANTHROPIC_MODEL', 'GEMINI_MODEL'];
 
 const isPlainObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
@@ -97,7 +97,15 @@ export function validateClientConfig(raw) {
     }
   }
 
-  checkStringMap(raw.build, 'build', BUILD_KEYS, errors, /^[^\s\u0000-\u001f]*$/);
+  // The admin UI must call its own origin (adminDomain, behind Access). Pointing it
+  // at customDomain would make every admin API call fail Access verification.
+  if (isPlainObject(raw.build) && 'NEXT_PUBLIC_API_URL' in raw.build) {
+    errors.push('build.NEXT_PUBLIC_API_URL must be omitted: the admin UI calls its own Access-protected origin');
+  }
+  checkStringMap(
+    isPlainObject(raw.build) ? Object.fromEntries(Object.entries(raw.build).filter(([k]) => k !== 'NEXT_PUBLIC_API_URL')) : raw.build,
+    'build', BUILD_KEYS, errors, /^[^\s\u0000-\u001f]*$/,
+  );
   if (raw.vars !== undefined) checkStringMap(raw.vars, 'vars', VAR_KEYS, errors);
 
   return errors.length ? { ok: false, errors } : { ok: true, config: raw };

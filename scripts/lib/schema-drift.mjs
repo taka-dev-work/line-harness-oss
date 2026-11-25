@@ -1,6 +1,13 @@
 // Compares table/column sets between an expected schema and an actual database.
 import { execFileSync } from 'node:child_process';
 
+/**
+ * Drift is measured against the frozen baseline: later migrations (ALTER TABLE …)
+ * add their own columns when applied, so they must not be reported as missing —
+ * an operator "repairing" them by hand would make those migrations fail.
+ */
+export const EXPECTED_SCHEMA_FILE = 'packages/db/d1-migrations/0000_baseline.sql';
+
 export const COLUMNS_QUERY =
   "SELECT m.name AS t, p.name AS c FROM sqlite_master m JOIN pragma_table_info(m.name) p WHERE m.type='table'";
 const IGNORED_TABLES = new Set(['d1_migrations', '_cf_KV', 'sqlite_sequence']);

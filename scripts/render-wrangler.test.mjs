@@ -50,8 +50,8 @@ test('refuses to render an invalid config', () => {
   assert.throws(() => renderWranglerToml({ ...validFixture(), apiToken: 'x' }), /unknown key: apiToken/);
 });
 
-test('renderWebBuildEnv returns only build keys', () => {
-  assert.deepEqual(renderWebBuildEnv(validFixture()), validFixture().build);
+test('renderWebBuildEnv returns build keys and pins the admin API to same-origin', () => {
+  assert.deepEqual(renderWebBuildEnv(validFixture()), { ...validFixture().build, NEXT_PUBLIC_API_URL: '' });
 });
 
 test('CLI exits 1 on invalid config without printing values', () => {
@@ -88,7 +88,7 @@ test('CLI writes config and web env', () => {
     writeFileSync(file, JSON.stringify(validFixture()));
     execFileSync('node', [CLI, '--client', file, '--out', join(dir, 'out.toml'), '--web-env-out', join(dir, 'web.env')], { stdio: 'pipe' });
     assert.ok(readFileSync(join(dir, 'out.toml'), 'utf8').includes('workers_dev = false'));
-    assert.equal(readFileSync(join(dir, 'web.env'), 'utf8'), 'VITE_LIFF_ID=1234567890-abcdefgh\nVITE_BOT_BASIC_ID=@acme\n');
+    assert.equal(readFileSync(join(dir, 'web.env'), 'utf8'), 'VITE_LIFF_ID=1234567890-abcdefgh\nVITE_BOT_BASIC_ID=@acme\nNEXT_PUBLIC_API_URL=\n');
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
