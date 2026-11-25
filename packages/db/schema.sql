@@ -755,12 +755,29 @@ CREATE TABLE IF NOT EXISTS staff_members (
   role       TEXT NOT NULL CHECK (role IN ('owner', 'admin', 'staff')),
   api_key    TEXT UNIQUE NOT NULL,
   is_active  INTEGER NOT NULL DEFAULT 1,
+  api_key_hint TEXT,
   created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%f', 'now', '+9 hours')),
   updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%f', 'now', '+9 hours'))
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_staff_members_api_key ON staff_members(api_key);
 CREATE INDEX IF NOT EXISTS idx_staff_members_role ON staff_members(role);
+
+-- Audit log of authenticated changes (no request bodies, query strings or headers).
+CREATE TABLE IF NOT EXISTS audit_logs (
+  id           TEXT PRIMARY KEY,
+  staff_id     TEXT NOT NULL,
+  staff_name   TEXT NOT NULL,
+  role         TEXT NOT NULL,
+  access_email TEXT,
+  method       TEXT NOT NULL,
+  path         TEXT NOT NULL,
+  status       INTEGER NOT NULL,
+  ip           TEXT,
+  created_at   TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON audit_logs(created_at);
 
 -- Reusable message templates (text or Flex) for reward messages in campaigns
 CREATE TABLE IF NOT EXISTS message_templates (
