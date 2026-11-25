@@ -6,6 +6,7 @@ import {
   updateStaffMember,
   deleteStaffMember,
   regenerateStaffApiKey,
+  rehashPlaintextStaffKeys,
   countActiveStaffByRole,
 } from '@line-crm/db';
 import type { StaffMember } from '@line-crm/db';
@@ -14,17 +15,19 @@ import type { Env } from '../index.js';
 
 const staff = new Hono<Env>();
 
-function maskApiKey(key: string): string {
-  return `lh_****${key.slice(-4)}`;
+function maskedKey(row: StaffMember): string {
+  return `lh_****${row.api_key_hint ?? '????'}`;
 }
 
-function serializeStaff(row: StaffMember, masked = true) {
+// The stored api_key is a hash; it is never returned. A plaintext key is only
+// returned by create and regenerate, passed in explicitly.
+function serializeStaff(row: StaffMember, plaintextKey?: string) {
   return {
     id: row.id,
     name: row.name,
     email: row.email,
     role: row.role,
-    apiKey: masked ? maskApiKey(row.api_key) : row.api_key,
+    apiKey: plaintextKey ?? maskedKey(row),
     isActive: Boolean(row.is_active),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -73,7 +76,7 @@ staff.get('/api/staff/me', async (c) => {
 staff.get('/api/staff', requireRole('owner'), async (c) => {
   try {
     const members = await getStaffMembers(c.env.DB);
-    return c.json({ success: true, data: members.map((m) => serializeStaff(m, true)) });
+    return c.json({ success: true, data: members.map((m) => serializeStaff(m)) });
   } catch (err) {
     console.error('GET /api/staff error:', err);
     return c.json({ success: false, error: 'Internal server error' }, 500);
@@ -88,7 +91,7 @@ staff.get('/api/staff/:id', requireRole('owner'), async (c) => {
     if (!member) {
       return c.json({ success: false, error: 'Staff member not found' }, 404);
     }
-    return c.json({ success: true, data: serializeStaff(member, true) });
+    return c.json({ success: true, data: serializeStaff(member) });
   } catch (err) {
     console.error('GET /api/staff/:id error:', err);
     return c.json({ success: false, error: 'Internal server error' }, 500);
@@ -109,14 +112,14 @@ staff.post('/api/staff', requireRole('owner'), async (c) => {
       return c.json({ success: false, error: 'role must be owner, admin, or staff' }, 400);
     }
 
-    const member = await createStaffMember(c.env.DB, {
+    const { member, apiKey } = await createStaffMember(c.env.DB, {
       name: body.name,
       email: body.email ?? null,
       role: body.role as 'owner' | 'admin' | 'staff',
     });
 
     // Return full (unmasked) API key one-time
-    return c.json({ success: true, data: serializeStaff(member, false) }, 201);
+    return c.json({ success: true, data: serializeStaff(member, apiKey) }, 201);
   } catch (err) {
     console.error('POST /api/staff error:', err);
     return c.json({ success: false, error: 'Internal server error' }, 500);
@@ -167,7 +170,7 @@ staff.patch('/api/staff/:id', requireRole('owner'), async (c) => {
       return c.json({ success: false, error: 'Staff member not found' }, 404);
     }
 
-    return c.json({ success: true, data: serializeStaff(updated, true) });
+    return c.json({ success: true, data: serializeStaff(updated) });
   } catch (err) {
     console.error('PATCH /api/staff/:id error:', err);
     return c.json({ success: false, error: 'Internal server error' }, 500);
@@ -200,6 +203,17 @@ staff.delete('/api/staff/:id', requireRole('owner'), async (c) => {
     return c.json({ success: true, data: null });
   } catch (err) {
     console.error('DELETE /api/staff/:id error:', err);
+    return c.json({ success: false, error: 'Internal server error' }, 500);
+  }
+});
+
+// POST /api/staff/rehash-keys — owner only. Hash any staff keys still stored in plaintext.
+staff.post('/api/staff/rehash-keys', requireRole('owner'), async (c) => {
+  try {
+    const rehashed = await rehashPlaintextStaffKeys(c.env.DB);
+    return c.json({ success: true, data: { rehashed } });
+  } catch (err) {
+    console.error('POST /api/staff/rehash-keys error:', err);
     return c.json({ success: false, error: 'Internal server error' }, 500);
   }
 });

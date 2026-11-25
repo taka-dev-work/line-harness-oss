@@ -24,5 +24,9 @@
     "crm",
     "d1",
     "cloudflare"
-  ]
+  ],
+  "exports": {
+    ".": "./src/index.ts",
+    "./testing": "./src/test-d1.ts"
+  }
 }
