@@ -69,6 +69,26 @@ CLIENT_CONFIG=path/to/client.json pnpm db:migrate:client
 CLIENT_CONFIG=path/to/client.json pnpm deploy:client
 ```
 
+## 5a. 管理画面を Cloudflare Access で保護する（必須）
+
+管理API は、Cloudflare Access を通ったリクエストにしか応答しません（`client.json` の `access` が必須）。
+
+1. クライアントの Cloudflare で Zero Trust → Access → Applications に **Self-hosted** アプリを作り、ドメインに `adminDomain` を指定する。ポリシーで管理画面を使う人のメールアドレス（またはIdPグループ）だけを許可する
+2. アプリの **AUD タグ**と、チームドメイン（`<team>.cloudflareaccess.com`）を `client.json` の `access.aud` / `access.teamDomain` に書いて再デプロイする
+3. MCP などの自動操作を使う場合は Service Auth で**サービストークン**を作り、アプリのポリシーに Service Auth ルールを追加する（設定方法はインストールガイドの MCP Setup）
+4. 確認: `customDomain` 側で管理API を叩くと `403 Access verification required` になること、`adminDomain` からはログイン後に管理画面が使えること
+
+## 5b. 初期オーナーを作り、環境変数キーを無効化する
+
+`API_KEY`（環境変数）は初期設定専用です。有効なオーナーが1人でもいると使えなくなります。
+
+1. `API_KEY` で管理画面に入り、スタッフ画面でオーナーを作成する（表示されたキーは一度しか表示されない。パスワードマネージャーへ保存）
+2. 発行されたオーナーキーで入り直し、`API_KEY` では `401` になることを確認する
+3. 旧バージョンからの更新時は、オーナーで `POST /api/staff/rehash-keys` を1回実行し、平文で残っているスタッフキーをハッシュ化する
+4. 全オーナーを無効化・削除すると `API_KEY` が再び有効になる（復旧手段）。通常運用ではオーナーを最低2人にしておく
+
+操作の記録（監査ログ）は `audit_logs` テーブルに1年間保存されます。
+
 ## 6. CRM初期データを投入する
 
 ```bash
