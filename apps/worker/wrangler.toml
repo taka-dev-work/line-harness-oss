@@ -22,6 +22,7 @@ binding = "ASSETS"
 binding = "DB"
 database_name = "line-harness"
 database_id = "YOUR_DEV_D1_DATABASE_ID"
+migrations_dir = "../../packages/db/d1-migrations"
 
 # R2 removed — image storage moved to Supabase Storage
 # [[r2_buckets]]
