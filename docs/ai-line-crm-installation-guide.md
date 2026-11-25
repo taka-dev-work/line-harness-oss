@@ -102,24 +102,19 @@ Create a D1 database:
 pnpm exec wrangler d1 create line-crm
 ```
 
-Put the returned `database_id` into:
+Put the returned `database_id` into the client's `client.json` as `d1DatabaseId`
+(see `scripts/lib/client-config.mjs` for the full schema), then render the config:
 
-```text
-apps/worker/wrangler.toml
+```bash
+node scripts/render-wrangler-config.mjs --client path/to/client.json --out apps/worker/wrangler.client.toml
 ```
 
-Under:
-
-```toml
-[[env.production.d1_databases]]
-database_name = "line-crm"
-database_id = "YOUR_D1_DATABASE_ID"
-```
+Do not put production IDs into `apps/worker/wrangler.toml`.
 
 Apply schema/migrations:
 
 ```bash
-pnpm db:migrate
+pnpm db:migrate:client
 ```
 
 ## 5. Production Secrets
@@ -127,34 +122,34 @@ pnpm db:migrate
 Set these in Cloudflare Workers:
 
 ```bash
-pnpm exec wrangler secret put API_KEY --config apps/worker/wrangler.toml --env production
-pnpm exec wrangler secret put LINE_CHANNEL_ACCESS_TOKEN --config apps/worker/wrangler.toml --env production
-pnpm exec wrangler secret put LINE_CHANNEL_SECRET --config apps/worker/wrangler.toml --env production
-pnpm exec wrangler secret put LINE_LOGIN_CHANNEL_ID --config apps/worker/wrangler.toml --env production
-pnpm exec wrangler secret put LINE_LOGIN_CHANNEL_SECRET --config apps/worker/wrangler.toml --env production
-pnpm exec wrangler secret put WORKER_URL --config apps/worker/wrangler.toml --env production
-pnpm exec wrangler secret put LIFF_URL --config apps/worker/wrangler.toml --env production
-pnpm exec wrangler secret put GEMINI_API_KEY --config apps/worker/wrangler.toml --env production
+pnpm exec wrangler secret put API_KEY --config apps/worker/wrangler.client.toml
+pnpm exec wrangler secret put LINE_CHANNEL_ACCESS_TOKEN --config apps/worker/wrangler.client.toml
+pnpm exec wrangler secret put LINE_CHANNEL_SECRET --config apps/worker/wrangler.client.toml
+pnpm exec wrangler secret put LINE_LOGIN_CHANNEL_ID --config apps/worker/wrangler.client.toml
+pnpm exec wrangler secret put LINE_LOGIN_CHANNEL_SECRET --config apps/worker/wrangler.client.toml
+pnpm exec wrangler secret put WORKER_URL --config apps/worker/wrangler.client.toml
+pnpm exec wrangler secret put LIFF_URL --config apps/worker/wrangler.client.toml
+pnpm exec wrangler secret put GEMINI_API_KEY --config apps/worker/wrangler.client.toml
 ```
 
 Optional Google Calendar / Meet:
 
 ```bash
-pnpm exec wrangler secret put GOOGLE_SERVICE_ACCOUNT_EMAIL --config apps/worker/wrangler.toml --env production
-pnpm exec wrangler secret put GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY --config apps/worker/wrangler.toml --env production
-pnpm exec wrangler secret put GOOGLE_CALENDAR_ID --config apps/worker/wrangler.toml --env production
+pnpm exec wrangler secret put GOOGLE_SERVICE_ACCOUNT_EMAIL --config apps/worker/wrangler.client.toml
+pnpm exec wrangler secret put GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY --config apps/worker/wrangler.client.toml
+pnpm exec wrangler secret put GOOGLE_CALENDAR_ID --config apps/worker/wrangler.client.toml
 ```
 
 Check:
 
 ```bash
-pnpm exec wrangler secret list --config apps/worker/wrangler.toml --env production
+pnpm exec wrangler secret list --config apps/worker/wrangler.client.toml
 ```
 
 ## 6. Deploy
 
 ```bash
-pnpm deploy:worker:production
+CLIENT_CONFIG=path/to/client.json pnpm deploy:client
 ```
 
 Your app will be available at:

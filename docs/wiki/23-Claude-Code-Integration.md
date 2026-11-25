@@ -275,7 +275,7 @@ curl -s https://your-worker.your-subdomain.workers.dev/api/friends/count \
 cd /Users/axpr/claudecode/tools/line-harness
 
 # スキーマ適用
-pnpm db:migrate
+pnpm db:migrate:client
 ```
 
 ---

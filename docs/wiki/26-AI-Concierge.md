@@ -14,38 +14,25 @@ AIコンシェルジュは、LINEで届いた質問が登録済みサービス�
 
 ## 1. D1を更新する
 
-本番環境へAIコンシェルジュ用テーブルを追加します。
+AIコンシェルジュ用テーブルは `packages/db/d1-migrations/` の初期スキーマに含まれています。
+クライアント環境へは、生成済みの `apps/worker/wrangler.client.toml` を使って適用します。
 
 ```bash
-pnpm exec wrangler d1 execute line-crm \
-  --config apps/worker/wrangler.toml \
-  --env production \
-  --remote \
-  --file packages/db/migrations/031_ai_concierge.sql
+pnpm db:migrate:client
 ```
-
-新規環境でスキーマ全体を適用する場合は、ルートの `pnpm db:migrate` を使用できます。
 
 ## 2. AIプロバイダーを設定する
 
 使用するプロバイダーのキーだけをCloudflare Secretへ登録します。値はソースコード、`wrangler.toml`、管理画面へ保存しません。
 
-`.env.production` でまとめて管理する場合は、exampleをコピーして実値を入れてから同期します。
-
-```bash
-cp .env.production.example .env.production
-# .env.production を編集
-pnpm secrets:sync:production
-```
-
-`.env.production` はgit管理外です。同期スクリプトはenvファイルを実行せず、既知のsecret名だけを `wrangler secret put` へ送ります。
+シークレットをファイルにまとめて同期する方法は使いません（PCに平文を残さないため）。クライアント本人が Cloudflare ダッシュボードで入力するか、担当者が `wrangler secret put` で対話入力します。
 
 個別に登録する場合は次のコマンドを使います。
 
 ```bash
-pnpm exec wrangler secret put OPENAI_API_KEY --config apps/worker/wrangler.toml --env production
-pnpm exec wrangler secret put ANTHROPIC_API_KEY --config apps/worker/wrangler.toml --env production
-pnpm exec wrangler secret put GEMINI_API_KEY --config apps/worker/wrangler.toml --env production
+pnpm exec wrangler secret put OPENAI_API_KEY --config apps/worker/wrangler.client.toml
+pnpm exec wrangler secret put ANTHROPIC_API_KEY --config apps/worker/wrangler.client.toml
+pnpm exec wrangler secret put GEMINI_API_KEY --config apps/worker/wrangler.client.toml
 ```
 
 モデル名は秘密情報ではないため、`apps/worker/wrangler.toml` の環境変数で任意に変更できます。
@@ -99,8 +86,8 @@ AIコンシェルジュとは別に、外部からWorkerを呼ぶ経路もSecret
 | Stripe webhook | Cloudflare Secret `STRIPE_WEBHOOK_SECRET` | Stripe標準の `Stripe-Signature` |
 
 ```bash
-pnpm exec wrangler secret put MEET_CALLBACK_SECRET --config apps/worker/wrangler.toml --env production
-pnpm exec wrangler secret put STRIPE_WEBHOOK_SECRET --config apps/worker/wrangler.toml --env production
+pnpm exec wrangler secret put MEET_CALLBACK_SECRET --config apps/worker/wrangler.client.toml
+pnpm exec wrangler secret put STRIPE_WEBHOOK_SECRET --config apps/worker/wrangler.client.toml
 ```
 
 Incoming WebhookのSecretは作成・更新時だけ入力し、APIの応答では値ではなく `hasSecret` だけを返します。

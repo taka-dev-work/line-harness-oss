@@ -26,8 +26,8 @@ Help the user clone this project, configure local development, deploy it to Clou
 pnpm install
 pnpm dev:worker
 pnpm dev:web
-pnpm db:migrate
-pnpm deploy:worker:production
+pnpm db:migrate:client
+CLIENT_CONFIG=path/to/client.json pnpm deploy:client
 pnpm crm:seed:ai-line -- --url-config=config/ai-line-crm.urls.production.json --strict-urls
 pnpm --filter @line-harness/mcp-server build
 ```

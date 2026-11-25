@@ -32,32 +32,8 @@ database_id = "YOUR_DEV_D1_DATABASE_ID"
 crons = ["*/5 * * * *"]
 
 # ═══════════════════════════════════════════════════════════════
-# 本番環境
-# 使い方: npx wrangler deploy --env production --name your-worker-name
-# D1:     npx wrangler d1 execute line-crm --env production --remote --file ...
+# 本番環境はこのファイルに書かない。
+# クライアントごとの client.json から wrangler.client.toml を生成してデプロイする:
+#   CLIENT_CONFIG=path/to/client.json pnpm deploy:client
+# 詳細: docs/superpowers/specs/2026-11-26-per-client-deployment-design.md
 # ═══════════════════════════════════════════════════════════════
-[env.production]
-name = "ai-line-crm"
-account_id = "f3f7f68bed5ad92623051bb800350d5b"
-
-[env.production.vars]
-OPENAI_MODEL = "gpt-5-mini"
-ANTHROPIC_MODEL = "claude-sonnet-5"
-GEMINI_MODEL = "gemini-3.6-flash"
-
-[env.production.assets]
-directory = "../web/out"
-binding = "ASSETS"
-
-[[env.production.d1_databases]]
-binding = "DB"
-database_name = "line-crm"
-database_id = "461506df-bd6e-4d2d-a514-637ed9bbf803"
-
-# R2 removed — image storage moved to Supabase Storage
-# [[env.production.r2_buckets]]
-# binding = "IMAGES"
-# bucket_name = "line-harness-images"
-
-[env.production.triggers]
-crons = ["*/5 * * * *"]

@@ -34,29 +34,29 @@ pnpm crm:check:ai-line -- --url-config=config/ai-line-crm.urls.production.json -
 Worker本番環境に以下を設定します。
 
 ```bash
-wrangler secret put API_KEY --config apps/worker/wrangler.toml --env production
-wrangler secret put LINE_CHANNEL_ACCESS_TOKEN --config apps/worker/wrangler.toml --env production
-wrangler secret put LINE_CHANNEL_SECRET --config apps/worker/wrangler.toml --env production
-wrangler secret put LINE_LOGIN_CHANNEL_ID --config apps/worker/wrangler.toml --env production
-wrangler secret put LINE_LOGIN_CHANNEL_SECRET --config apps/worker/wrangler.toml --env production
-wrangler secret put WORKER_URL --config apps/worker/wrangler.toml --env production
-wrangler secret put LIFF_URL --config apps/worker/wrangler.toml --env production
+wrangler secret put API_KEY --config apps/worker/wrangler.client.toml
+wrangler secret put LINE_CHANNEL_ACCESS_TOKEN --config apps/worker/wrangler.client.toml
+wrangler secret put LINE_CHANNEL_SECRET --config apps/worker/wrangler.client.toml
+wrangler secret put LINE_LOGIN_CHANNEL_ID --config apps/worker/wrangler.client.toml
+wrangler secret put LINE_LOGIN_CHANNEL_SECRET --config apps/worker/wrangler.client.toml
+wrangler secret put WORKER_URL --config apps/worker/wrangler.client.toml
+wrangler secret put LIFF_URL --config apps/worker/wrangler.client.toml
 ```
 
 `WORKER_URL` は固定Worker URL、`LIFF_URL` はLIFFのエンドポイントまたはWorker固定URLを設定します。
 
 ## 4. D1を本番へ反映する
 
-`apps/worker/wrangler.toml` の `env.production.d1_databases` に本番D1の `database_id` を入れてから実行します。
+クライアントの `client.json` に本番D1の `d1DatabaseId` を書き、`wrangler.client.toml` を生成してから実行します（`pnpm deploy:client` 実行時にも生成されます）。
 
 ```bash
-pnpm db:migrate
+pnpm db:migrate:client
 ```
 
 ## 5. Workerをデプロイする
 
 ```bash
-pnpm deploy:worker:production
+CLIENT_CONFIG=path/to/client.json pnpm deploy:client
 ```
 
 ## 6. CRM初期データを投入する

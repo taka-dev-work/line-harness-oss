@@ -39,8 +39,8 @@ cp config/ai-line-crm.urls.production.example.json config/ai-line-crm.urls.produ
 1. Cloudflare D1を作る
 2. `apps/worker/wrangler.toml` に本番D1の `database_id` を入れる
 3. LINE Developersの各キーをCloudflare Secretに入れる
-4. `pnpm db:migrate` でDBを作る
-5. `pnpm deploy:worker:production` で本番デプロイ
+4. `pnpm db:migrate:client` でDBを作る
+5. `CLIENT_CONFIG=path/to/client.json pnpm deploy:client` で本番デプロイ
 6. LINE DevelopersのWebhook URLを設定する
 7. `pnpm crm:seed:ai-line` でAI LINE CRM初期データを投入する
 8. 必要に応じてGoogle Calendar / MeetとMCPを設定する

@@ -23,3 +23,7 @@ scripts/seed-*.sql
 apps/web/out/
 apps/worker/dist/
 .worktrees/
+
+# per-client deploy (generated / local client configs)
+apps/worker/wrangler.client.toml
+clients/
