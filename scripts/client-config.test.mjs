@@ -68,3 +68,11 @@ test('rejects non-object input', () => {
     assert.equal(result.ok, false);
   }
 });
+
+test('rejects whitespace or newlines in build values', () => {
+  const raw = validFixture();
+  raw.build.VITE_BOT_BASIC_ID = '@acme\nEXTRA=1';
+  const result = validateClientConfig(raw);
+  assert.equal(result.ok, false);
+  assert.ok(result.errors.some((e) => e.includes('build.VITE_BOT_BASIC_ID')));
+});

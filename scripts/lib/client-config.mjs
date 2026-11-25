@@ -23,7 +23,7 @@ const VAR_KEYS = ['OPENAI_MODEL', 'ANTHROPIC_MODEL', 'GEMINI_MODEL'];
 
 const isPlainObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 
-function checkStringMap(value, path, allowed, errors) {
+function checkStringMap(value, path, allowed, errors, valuePattern) {
   if (!isPlainObject(value)) {
     errors.push(`${path} must be an object`);
     return;
@@ -31,6 +31,7 @@ function checkStringMap(value, path, allowed, errors) {
   for (const [key, v] of Object.entries(value)) {
     if (!allowed.includes(key)) errors.push(`unknown key: ${path}.${key}`);
     else if (typeof v !== 'string') errors.push(`${path}.${key} must be a string`);
+    else if (valuePattern && !valuePattern.test(v)) errors.push(`${path}.${key} contains whitespace or control characters`);
   }
 }
 
@@ -79,7 +80,7 @@ export function validateClientConfig(raw) {
     }
   }
 
-  checkStringMap(raw.build, 'build', BUILD_KEYS, errors);
+  checkStringMap(raw.build, 'build', BUILD_KEYS, errors, /^[^\s\u0000-\u001f]*$/);
   if (raw.vars !== undefined) checkStringMap(raw.vars, 'vars', VAR_KEYS, errors);
 
   return errors.length ? { ok: false, errors } : { ok: true, config: raw };
