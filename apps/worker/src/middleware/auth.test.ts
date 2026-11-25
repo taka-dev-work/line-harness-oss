@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test, vi } from 'vitest';
 import { Hono } from 'hono';
 import { authMiddleware } from './auth.js';
 import type { Env } from '../index.js';
@@ -112,5 +112,85 @@ describe('env API key is bootstrap-only', async () => {
     expect(await secureEquals('abc', 'abd')).toBe(false);
     expect(await secureEquals('abc', 'abcd')).toBe(false);
     expect(await secureEquals('', 'x')).toBe(false);
+  });
+});
+
+describe('Cloudflare Access enforcement', async () => {
+  const { createTestD1 } = await import('@line-crm/db/testing');
+  const { createStaffMember } = await import('@line-crm/db');
+  const accessJwt = await import('./access-jwt.js');
+
+  function appWith() {
+    const app = new Hono<Env>();
+    app.use('*', authMiddleware);
+    app.get('/api/tags', (c) => c.json({ who: c.get('staff').id, email: c.get('accessEmail') ?? null }));
+    app.get('/api/forms/:id', (c) => c.text('public form'));
+    return app;
+  }
+
+  async function staffEnv(extra: Record<string, string> = {}) {
+    const { db } = createTestD1();
+    const { apiKey } = await createStaffMember(db, { name: 'Owner', role: 'owner' });
+    return { apiKey, env: { DB: db, API_KEY: 'env-secret', ...extra } as unknown as Env['Bindings'] };
+  }
+  const ACCESS = { ACCESS_TEAM_DOMAIN: 'nibel-acme.cloudflareaccess.com', ACCESS_AUD: 'a'.repeat(64) };
+
+  test('403 without Cf-Access-Jwt-Assertion when Access configured', async () => {
+    const { apiKey, env } = await staffEnv(ACCESS);
+    const res = await appWith().request('/api/tags', { headers: { Authorization: `Bearer ${apiKey}` } }, env);
+    expect(res.status).toBe(403);
+    expect(await res.json()).toEqual({ success: false, error: 'Access verification required' });
+  });
+
+  test('403 with an invalid assertion', async () => {
+    const { apiKey, env } = await staffEnv(ACCESS);
+    const spy = vi.spyOn(accessJwt, 'verifyAccessJwt').mockResolvedValue(null);
+    const res = await appWith().request('/api/tags', {
+      headers: { Authorization: `Bearer ${apiKey}`, 'Cf-Access-Jwt-Assertion': 'x.y.z' },
+    }, env);
+    expect(res.status).toBe(403);
+    spy.mockRestore();
+  });
+
+  test('passes with a valid assertion and exposes the Access email', async () => {
+    const { apiKey, env } = await staffEnv(ACCESS);
+    const spy = vi.spyOn(accessJwt, 'verifyAccessJwt').mockResolvedValue({ email: 'staff@acme.example' });
+    const res = await appWith().request('/api/tags', {
+      headers: { Authorization: `Bearer ${apiKey}`, 'Cf-Access-Jwt-Assertion': 'x.y.z' },
+    }, env);
+    expect(res.status).toBe(200);
+    expect((await res.json() as { email: string }).email).toBe('staff@acme.example');
+    expect(spy).toHaveBeenCalledWith('x.y.z', { teamDomain: ACCESS.ACCESS_TEAM_DOMAIN, aud: ACCESS.ACCESS_AUD });
+    spy.mockRestore();
+  });
+
+  test('a valid assertion never replaces the API key', async () => {
+    const { env } = await staffEnv(ACCESS);
+    const spy = vi.spyOn(accessJwt, 'verifyAccessJwt').mockResolvedValue({ email: 'staff@acme.example' });
+    const res = await appWith().request('/api/tags', { headers: { 'Cf-Access-Jwt-Assertion': 'x.y.z' } }, env);
+    expect(res.status).toBe(401);
+    spy.mockRestore();
+  });
+
+  test('public paths stay public when Access configured', async () => {
+    const { env } = await staffEnv(ACCESS);
+    const res = await appWith().request('/api/forms/f1', undefined, env);
+    expect(res.status).toBe(200);
+  });
+
+  test.each([
+    ['only ACCESS_AUD set', { ACCESS_AUD: 'a'.repeat(64) }],
+    ['only ACCESS_TEAM_DOMAIN set', { ACCESS_TEAM_DOMAIN: 'nibel-acme.cloudflareaccess.com' }],
+  ])('500 when %s', async (_name, extra) => {
+    const { apiKey, env } = await staffEnv(extra);
+    const res = await appWith().request('/api/tags', { headers: { Authorization: `Bearer ${apiKey}` } }, env);
+    expect(res.status).toBe(500);
+    expect(await res.json()).toEqual({ success: false, error: 'Access misconfigured' });
+  });
+
+  test('unchanged when Access not configured', async () => {
+    const { apiKey, env } = await staffEnv();
+    const res = await appWith().request('/api/tags', { headers: { Authorization: `Bearer ${apiKey}` } }, env);
+    expect(res.status).toBe(200);
   });
 });

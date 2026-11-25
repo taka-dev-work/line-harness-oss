@@ -76,3 +76,27 @@ test('rejects whitespace or newlines in build values', () => {
   assert.equal(result.ok, false);
   assert.ok(result.errors.some((e) => e.includes('build.VITE_BOT_BASIC_ID')));
 });
+
+test('rejects missing access block', () => {
+  const raw = validFixture();
+  delete raw.access;
+  const result = validateClientConfig(raw);
+  assert.equal(result.ok, false);
+  assert.ok(result.errors.some((e) => e.startsWith('access')), result.errors.join('\n'));
+});
+
+test('rejects bad teamDomain and aud', () => {
+  const raw = validFixture();
+  raw.access = { teamDomain: 'evil.example.com', aud: 'short' };
+  const result = validateClientConfig(raw);
+  assert.equal(result.ok, false);
+  assert.ok(result.errors.some((e) => e.includes('access.teamDomain')));
+  assert.ok(result.errors.some((e) => e.includes('access.aud')));
+});
+
+test('rejects unknown key inside access', () => {
+  const raw = validFixture();
+  raw.access.clientSecret = 'x';
+  const result = validateClientConfig(raw);
+  assert.ok(result.errors.includes('unknown key: access.clientSecret'));
+});

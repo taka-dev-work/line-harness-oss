@@ -1,6 +1,7 @@
 import type { Context, Next } from 'hono';
 import { getStaffByApiKey, countActiveStaffByRole } from '@line-crm/db';
 import type { Env } from '../index.js';
+import * as accessJwt from './access-jwt.js';
 
 export async function authMiddleware(c: Context<Env>, next: Next): Promise<Response | void> {
   // Skip auth for the LINE webhook endpoint — it uses signature verification instead
@@ -50,7 +51,7 @@ export async function authMiddleware(c: Context<Env>, next: Next): Promise<Respo
   const staff = await getStaffByApiKey(c.env.DB, token);
   if (staff) {
     c.set('staff', { id: staff.id, name: staff.name, role: staff.role });
-    return next();
+    return requireAccess(c, next);
   }
 
   // Env keys (API_KEY, LEGACY_API_KEY during rotation) are bootstrap-only: they act
@@ -64,11 +65,34 @@ export async function authMiddleware(c: Context<Env>, next: Next): Promise<Respo
       if ((await countActiveStaffByRole(c.env.DB, 'owner')) > 0) break;
       c.set('staff', { id: 'env-owner', name: 'Owner', role: 'owner' as const });
       if (envKey !== c.env.API_KEY) console.log('[auth] accept_via=LEGACY_API_KEY');
-      return next();
+      return requireAccess(c, next);
     }
   }
 
   return c.json({ success: false, error: 'Unauthorized' }, 401);
+}
+
+/**
+ * When Cloudflare Access is configured (ACCESS_TEAM_DOMAIN + ACCESS_AUD), an
+ * authenticated request must also carry a valid Access assertion, i.e. it came in
+ * through the Access-protected admin hostname. Half-configured = fail closed.
+ * This is in addition to the API key, never instead of it.
+ */
+async function requireAccess(c: Context<Env>, next: Next): Promise<Response | void> {
+  const teamDomain = c.env.ACCESS_TEAM_DOMAIN;
+  const aud = c.env.ACCESS_AUD;
+  if (!teamDomain && !aud) return next();
+  if (!teamDomain || !aud) {
+    console.error('[auth] Access misconfigured: set both ACCESS_TEAM_DOMAIN and ACCESS_AUD');
+    return c.json({ success: false, error: 'Access misconfigured' }, 500);
+  }
+  const assertion = c.req.header('Cf-Access-Jwt-Assertion');
+  const verified = assertion ? await accessJwt.verifyAccessJwt(assertion, { teamDomain, aud }) : null;
+  if (!verified) {
+    return c.json({ success: false, error: 'Access verification required' }, 403);
+  }
+  if (verified.email) c.set('accessEmail', verified.email);
+  return next();
 }
 
 /**

@@ -10,5 +10,6 @@ export function validFixture() {
     adminDomain: 'admin.acme.example',
     release: { tag: 'v0.14.0-nibel.1', commit: '0123456789abcdef0123456789abcdef01234567' },
     build: { VITE_LIFF_ID: '1234567890-abcdefgh', VITE_BOT_BASIC_ID: '@acme' },
+    access: { teamDomain: 'nibel-acme.cloudflareaccess.com', aud: 'a'.repeat(64) },
   };
 }

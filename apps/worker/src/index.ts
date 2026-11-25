@@ -62,6 +62,10 @@ export type Env = {
     LINE_CHANNEL_ACCESS_TOKEN: string;
     API_KEY: string;
     LEGACY_API_KEY?: string;
+    /** Cloudflare Access team domain, e.g. nibel-acme.cloudflareaccess.com */
+    ACCESS_TEAM_DOMAIN?: string;
+    /** Cloudflare Access application audience (AUD) tag */
+    ACCESS_AUD?: string;
     LIFF_URL: string;
     LINE_CHANNEL_ID: string;
     LINE_LOGIN_CHANNEL_ID: string;

@@ -17,7 +17,12 @@ const RELEASE = {
   commit: /^[0-9a-f]{40}$/,
 };
 const TOP_KEYS = ['slug', 'displayName', 'cloudflareAccountId', 'workerName', 'd1DatabaseName',
-  'd1DatabaseId', 'customDomain', 'adminDomain', 'release', 'build', 'vars'];
+  'd1DatabaseId', 'customDomain', 'adminDomain', 'release', 'build', 'vars', 'access'];
+// Cloudflare Access protects adminDomain (spec §2/§7): required for every client.
+const ACCESS = {
+  teamDomain: /^[a-z0-9-]+\.cloudflareaccess\.com$/,
+  aud: /^[0-9a-f]{64}$/,
+};
 const BUILD_KEYS = ['VITE_LIFF_ID', 'VITE_BOT_BASIC_ID', 'VITE_CALENDAR_CONNECTION_ID', 'NEXT_PUBLIC_API_URL'];
 const VAR_KEYS = ['OPENAI_MODEL', 'ANTHROPIC_MODEL', 'GEMINI_MODEL'];
 
@@ -77,6 +82,18 @@ export function validateClientConfig(raw) {
     for (const [field, pattern] of Object.entries(RELEASE)) {
       const v = raw.release[field];
       if (typeof v !== 'string' || !pattern.test(v)) errors.push(`release.${field} is missing or invalid`);
+    }
+  }
+
+  if (!isPlainObject(raw.access)) {
+    errors.push('access must be an object with teamDomain and aud');
+  } else {
+    for (const key of Object.keys(raw.access)) {
+      if (!(key in ACCESS)) errors.push(`unknown key: access.${key}`);
+    }
+    for (const [field, pattern] of Object.entries(ACCESS)) {
+      const v = raw.access[field];
+      if (typeof v !== 'string' || !pattern.test(v)) errors.push(`access.${field} is missing or invalid`);
     }
   }
 

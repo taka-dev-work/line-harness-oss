@@ -18,7 +18,12 @@ function assertValid(config) {
 /** @returns {string} wrangler.toml contents */
 export function renderWranglerToml(input) {
   const config = assertValid(input);
-  const vars = { ...DEFAULT_VARS, ...(config.vars ?? {}) };
+  const vars = {
+    ...DEFAULT_VARS,
+    ...(config.vars ?? {}),
+    ACCESS_TEAM_DOMAIN: config.access.teamDomain,
+    ACCESS_AUD: config.access.aud,
+  };
   const lines = [
     '# GENERATED from client.json — do not edit or commit',
     `name = ${str(config.workerName)}`,

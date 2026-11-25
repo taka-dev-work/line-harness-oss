@@ -93,3 +93,9 @@ test('CLI writes config and web env', () => {
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test('renders ACCESS vars', () => {
+  const out = renderWranglerToml(validFixture());
+  assert.ok(out.includes('ACCESS_TEAM_DOMAIN = "nibel-acme.cloudflareaccess.com"'));
+  assert.ok(out.includes(`ACCESS_AUD = "${'a'.repeat(64)}"`));
+});
