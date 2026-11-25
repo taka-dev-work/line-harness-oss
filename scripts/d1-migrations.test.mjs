@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync, readdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
+import { createHash } from 'node:crypto';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { tableColumns, diffSchemas } from './lib/schema-drift.mjs';
@@ -23,8 +24,12 @@ function withTempDb(fn) {
 
 const applySql = (db, file) => execFileSync('sqlite3', [db], { input: readFileSync(file) });
 
-test('baseline equals schema.sql', () => {
-  assert.ok(readFileSync(join(migrationsDir, '0000_baseline.sql')).equals(readFileSync(schemaPath)));
+// 0000_baseline.sql is frozen: later changes go into new migrations (and schema.sql).
+const BASELINE_SHA256 = 'ce9b79f0db154754c4ffe88c0b69e5494583fb14b028b489ec4a1a514c19a56b';
+
+test('baseline is frozen', () => {
+  const digest = createHash('sha256').update(readFileSync(join(migrationsDir, '0000_baseline.sql'))).digest('hex');
+  assert.equal(digest, BASELINE_SHA256);
 });
 
 test('file names are NNNN_name.sql', () => {
