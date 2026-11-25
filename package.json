@@ -18,7 +18,8 @@
     "crm:seed:ai-line": "node scripts/apply-ai-line-crm-blueprint.mjs",
     "crm:rich-menu:ai-line": "node scripts/export-ai-line-crm-rich-menu.mjs",
     "deploy:setup": "node packages/create-line-harness/dist/index.js",
-    "deploy:update": "node packages/create-line-harness/dist/index.js update"
+    "deploy:update": "node packages/create-line-harness/dist/index.js update",
+    "test:scripts": "node --test 'scripts/**/*.test.mjs'"
   },
   "packageManager": "pnpm@9.15.4",
   "engines": {
