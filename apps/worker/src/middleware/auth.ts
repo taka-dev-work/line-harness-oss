@@ -1,5 +1,5 @@
 import type { Context, Next } from 'hono';
-import { getStaffByApiKey } from '@line-crm/db';
+import { getStaffByApiKey, countActiveStaffByRole } from '@line-crm/db';
 import type { Env } from '../index.js';
 
 export async function authMiddleware(c: Context<Env>, next: Next): Promise<Response | void> {
@@ -53,28 +53,37 @@ export async function authMiddleware(c: Context<Env>, next: Next): Promise<Respo
     return next();
   }
 
-  // Fallback: env API_KEY acts as owner (current rotation slot)
-  if (token === c.env.API_KEY) {
-    c.set('staff', { id: 'env-owner', name: 'Owner', role: 'owner' as const });
-    return next();
-  }
-
-  // Legacy fallback: LEGACY_API_KEY accepted during rotation grace period.
-  // Uses the same staff.id as primary so /api/staff/me's special-case keeps
-  // working. Logs accept_via=LEGACY_API_KEY so operators can confirm zero
-  // legacy usage before deleting the secret to revoke the old key.
-  // Same-value guard: if both env vars are set to the same secret, the
-  // primary check above already accepts it; this branch must skip to avoid
-  // false LEGACY counters.
-  if (
-    c.env.LEGACY_API_KEY &&
-    c.env.LEGACY_API_KEY !== c.env.API_KEY &&
-    token === c.env.LEGACY_API_KEY
-  ) {
-    c.set('staff', { id: 'env-owner', name: 'Owner', role: 'owner' as const });
-    console.log('[auth] accept_via=LEGACY_API_KEY');
-    return next();
+  // Env keys (API_KEY, LEGACY_API_KEY during rotation) are bootstrap-only: they act
+  // as owner only while no active owner exists in staff_members. Once an owner is
+  // created they stop working; deactivating every owner re-enables them (recovery).
+  const envKeys = [c.env.API_KEY, c.env.LEGACY_API_KEY].filter(
+    (key, index, all): key is string => Boolean(key) && all.indexOf(key) === index,
+  );
+  for (const envKey of envKeys) {
+    if (await secureEquals(token, envKey)) {
+      if ((await countActiveStaffByRole(c.env.DB, 'owner')) > 0) break;
+      c.set('staff', { id: 'env-owner', name: 'Owner', role: 'owner' as const });
+      if (envKey !== c.env.API_KEY) console.log('[auth] accept_via=LEGACY_API_KEY');
+      return next();
+    }
   }
 
   return c.json({ success: false, error: 'Unauthorized' }, 401);
+}
+
+/**
+ * Constant-time string comparison: hashes both values to fixed-length digests and
+ * compares every byte, so timing does not reveal where the inputs differ.
+ */
+export async function secureEquals(a: string, b: string): Promise<boolean> {
+  const encoder = new TextEncoder();
+  const [da, db] = await Promise.all([
+    crypto.subtle.digest('SHA-256', encoder.encode(a)),
+    crypto.subtle.digest('SHA-256', encoder.encode(b)),
+  ]);
+  const va = new Uint8Array(da);
+  const vb = new Uint8Array(db);
+  let diff = 0;
+  for (let i = 0; i < va.length; i++) diff |= va[i] ^ vb[i];
+  return diff === 0;
 }

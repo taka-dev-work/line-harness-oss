@@ -57,3 +57,60 @@ describe('form route authentication boundaries', () => {
     expect(deleteResponse.status).toBe(401);
   });
 });
+
+describe('env API key is bootstrap-only', async () => {
+  const { createTestD1 } = await import('@line-crm/db/testing');
+  const { createStaffMember } = await import('@line-crm/db');
+  const { secureEquals } = await import('./auth.js');
+
+  function protectedApp() {
+    const app = new Hono<Env>();
+    app.use('*', authMiddleware);
+    app.get('/api/tags', (c) => c.json({ who: c.get('staff').id }));
+    return app;
+  }
+  const bearer = (key: string) => ({ headers: { Authorization: `Bearer ${key}` } });
+
+  test('env API_KEY works when no active owner exists', async () => {
+    const { db } = createTestD1();
+    const res = await protectedApp().request('/api/tags', bearer('env-secret'), { DB: db, API_KEY: 'env-secret' } as unknown as Env['Bindings']);
+    expect(res.status).toBe(200);
+  });
+
+  test('env API_KEY is rejected once an active owner exists', async () => {
+    const { db } = createTestD1();
+    await createStaffMember(db, { name: 'Owner', role: 'owner' });
+    const res = await protectedApp().request('/api/tags', bearer('env-secret'), { DB: db, API_KEY: 'env-secret' } as unknown as Env['Bindings']);
+    expect(res.status).toBe(401);
+  });
+
+  test('env API_KEY works again after every owner is deactivated', async () => {
+    const { db, raw } = createTestD1();
+    const { member } = await createStaffMember(db, { name: 'Owner', role: 'owner' });
+    raw.prepare('UPDATE staff_members SET is_active = 0 WHERE id = ?').run(member.id);
+    const res = await protectedApp().request('/api/tags', bearer('env-secret'), { DB: db, API_KEY: 'env-secret' } as unknown as Env['Bindings']);
+    expect(res.status).toBe(200);
+  });
+
+  test('LEGACY_API_KEY follows the same rule', async () => {
+    const { db } = createTestD1();
+    const env = { DB: db, API_KEY: 'env-secret', LEGACY_API_KEY: 'old-secret' } as unknown as Env['Bindings'];
+    expect((await protectedApp().request('/api/tags', bearer('old-secret'), env)).status).toBe(200);
+    await createStaffMember(db, { name: 'Owner', role: 'owner' });
+    expect((await protectedApp().request('/api/tags', bearer('old-secret'), env)).status).toBe(401);
+  });
+
+  test('staff keys keep working when an owner exists', async () => {
+    const { db } = createTestD1();
+    const { member, apiKey } = await createStaffMember(db, { name: 'Owner', role: 'owner' });
+    const res = await protectedApp().request('/api/tags', bearer(apiKey), { DB: db, API_KEY: 'env-secret' } as unknown as Env['Bindings']);
+    expect(await res.json()).toEqual({ who: member.id });
+  });
+
+  test('secureEquals compares exactly', async () => {
+    expect(await secureEquals('abc', 'abc')).toBe(true);
+    expect(await secureEquals('abc', 'abd')).toBe(false);
+    expect(await secureEquals('abc', 'abcd')).toBe(false);
+    expect(await secureEquals('', 'x')).toBe(false);
+  });
+});

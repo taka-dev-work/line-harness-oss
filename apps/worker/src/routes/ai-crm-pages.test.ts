@@ -6,6 +6,8 @@ const dbMocks = vi.hoisted(() => ({
   getFormById: vi.fn(),
   getForms: vi.fn(),
   getStaffByApiKey: vi.fn(),
+  // Bootstrap state: no active owner yet, so the env API_KEY is accepted.
+  countActiveStaffByRole: vi.fn(async () => 0),
 }));
 vi.mock('@line-crm/db', () => dbMocks);
 

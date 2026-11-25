@@ -7,6 +7,8 @@ const dbMocks = vi.hoisted(() => ({
   deleteAiConciergeFaq: vi.fn(),
   getAiConciergeSettings: vi.fn(),
   getStaffByApiKey: vi.fn(),
+  // Bootstrap state: no active owner yet, so the env API_KEY is accepted.
+  countActiveStaffByRole: vi.fn(async () => 0),
   listAiConciergeFaqs: vi.fn(),
   listAiConciergeLogs: vi.fn(),
   updateAiConciergeFaq: vi.fn(),
