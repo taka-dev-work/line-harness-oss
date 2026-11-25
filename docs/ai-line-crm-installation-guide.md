@@ -244,13 +244,21 @@ Edit `.mcp.json`:
       "command": "node",
       "args": ["packages/mcp-server/dist/index.js"],
       "env": {
-        "LINE_HARNESS_API_URL": "https://YOUR_WORKER_DOMAIN",
-        "LINE_HARNESS_API_KEY": "YOUR_API_KEY"
+        "LINE_HARNESS_API_URL": "https://ADMIN_DOMAIN",
+        "LINE_HARNESS_API_KEY": "YOUR_STAFF_API_KEY",
+        "LINE_HARNESS_ACCESS_CLIENT_ID": "YOUR_ACCESS_SERVICE_TOKEN_ID.access",
+        "LINE_HARNESS_ACCESS_CLIENT_SECRET": "YOUR_ACCESS_SERVICE_TOKEN_SECRET"
       }
     }
   }
 }
 ```
+
+The admin API only answers through the Cloudflare Access-protected admin host, so the
+MCP server needs an Access **service token** (Zero Trust → Access → Service Auth) that the
+admin application's policy allows. Use a staff API key (not the bootstrap `API_KEY`).
+Use the local build below, not the published `@line-harness/mcp-server` package, which
+does not send the Access headers.
 
 Build the MCP server:
 

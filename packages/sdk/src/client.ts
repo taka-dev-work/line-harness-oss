@@ -47,6 +47,8 @@ export class LineHarness {
       baseUrl: this.apiUrl,
       apiKey: config.apiKey,
       timeout: config.timeout ?? 30_000,
+      accessClientId: config.accessClientId,
+      accessClientSecret: config.accessClientSecret,
     })
 
     this.friends = new FriendsResource(http, this.defaultAccountId)

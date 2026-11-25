@@ -4,17 +4,25 @@ interface HttpClientConfig {
   baseUrl: string
   apiKey: string
   timeout: number
+  /** Cloudflare Access service token (both required to take effect) */
+  accessClientId?: string
+  accessClientSecret?: string
 }
 
 export class HttpClient {
   private readonly baseUrl: string
   private readonly apiKey: string
   private readonly timeout: number
+  private readonly accessHeaders: Record<string, string>
 
   constructor(config: HttpClientConfig) {
     this.baseUrl = config.baseUrl.replace(/\/$/, '')
     this.apiKey = config.apiKey
     this.timeout = config.timeout
+    this.accessHeaders =
+      config.accessClientId && config.accessClientSecret
+        ? { 'CF-Access-Client-Id': config.accessClientId, 'CF-Access-Client-Secret': config.accessClientSecret }
+        : {}
   }
 
   async get<T = unknown>(path: string): Promise<T> {
@@ -42,6 +50,7 @@ export class HttpClient {
     const headers: Record<string, string> = {
       Authorization: `Bearer ${this.apiKey}`,
       'Content-Type': 'application/json',
+      ...this.accessHeaders,
     }
 
     const options: RequestInit = {

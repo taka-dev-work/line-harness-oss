@@ -71,3 +71,42 @@ describe('HttpClient', () => {
     vi.unstubAllGlobals()
   })
 })
+
+describe('HttpClient Cloudflare Access service token', () => {
+  const okFetch = () => vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({ success: true }) })
+
+  it('adds access headers when configured', async () => {
+    const mockFetch = okFetch()
+    vi.stubGlobal('fetch', mockFetch)
+    const http = new HttpClient({
+      baseUrl: 'https://admin.acme.example', apiKey: 'k', timeout: 5000,
+      accessClientId: 'id.access', accessClientSecret: 'secret-value',
+    })
+    await http.get('/api/tags')
+    const headers = mockFetch.mock.calls[0][1].headers
+    expect(headers['CF-Access-Client-Id']).toBe('id.access')
+    expect(headers['CF-Access-Client-Secret']).toBe('secret-value')
+    expect(headers.Authorization).toBe('Bearer k')
+    vi.unstubAllGlobals()
+  })
+
+  it('omits them when not configured', async () => {
+    const mockFetch = okFetch()
+    vi.stubGlobal('fetch', mockFetch)
+    const http = new HttpClient({ baseUrl: 'https://admin.acme.example', apiKey: 'k', timeout: 5000 })
+    await http.get('/api/tags')
+    const headers = mockFetch.mock.calls[0][1].headers
+    expect(headers).not.toHaveProperty('CF-Access-Client-Id')
+    expect(headers).not.toHaveProperty('CF-Access-Client-Secret')
+    vi.unstubAllGlobals()
+  })
+
+  it('omits them when only one half is configured', async () => {
+    const mockFetch = okFetch()
+    vi.stubGlobal('fetch', mockFetch)
+    const http = new HttpClient({ baseUrl: 'https://admin.acme.example', apiKey: 'k', timeout: 5000, accessClientId: 'id.access' })
+    await http.get('/api/tags')
+    expect(mockFetch.mock.calls[0][1].headers).not.toHaveProperty('CF-Access-Client-Id')
+    vi.unstubAllGlobals()
+  })
+})

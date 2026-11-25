@@ -1,11 +1,13 @@
 {
   "mcpServers": {
     "ai-line-crm": {
-      "command": "npx",
-      "args": ["-y", "@line-harness/mcp-server@latest"],
+      "command": "node",
+      "args": ["packages/mcp-server/dist/index.js"],
       "env": {
-        "LINE_HARNESS_API_URL": "https://ai-line-crm.takanorixai.workers.dev",
-        "LINE_HARNESS_API_KEY": "YOUR_PRODUCTION_API_KEY"
+        "LINE_HARNESS_API_URL": "https://ADMIN_DOMAIN",
+        "LINE_HARNESS_API_KEY": "YOUR_STAFF_API_KEY",
+        "LINE_HARNESS_ACCESS_CLIENT_ID": "YOUR_ACCESS_SERVICE_TOKEN_ID.access",
+        "LINE_HARNESS_ACCESS_CLIENT_SECRET": "YOUR_ACCESS_SERVICE_TOKEN_SECRET"
       }
     }
   }

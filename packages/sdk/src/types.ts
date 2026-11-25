@@ -4,6 +4,9 @@ export interface LineHarnessConfig {
   apiKey: string
   timeout?: number  // default: 30000ms
   lineAccountId?: string  // default account for multi-account setups
+  /** Cloudflare Access service token, for admin hosts protected by Access */
+  accessClientId?: string
+  accessClientSecret?: string
 }
 
 // ─── API Response ───────────────────────────────────────

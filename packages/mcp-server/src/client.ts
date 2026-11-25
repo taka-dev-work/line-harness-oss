@@ -20,6 +20,9 @@ export function getClient(): LineHarness {
     apiUrl,
     apiKey,
     lineAccountId: accountId,
+    // Required when apiUrl is the Cloudflare Access-protected admin host.
+    accessClientId: process.env.LINE_HARNESS_ACCESS_CLIENT_ID,
+    accessClientSecret: process.env.LINE_HARNESS_ACCESS_CLIENT_SECRET,
   });
 
   return clientInstance;
