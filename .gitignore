@@ -25,5 +25,5 @@ apps/worker/dist/
 .worktrees/
 
 # per-client deploy (generated / local client configs)
-apps/worker/wrangler.client.toml
+apps/worker/wrangler.*.toml
 clients/

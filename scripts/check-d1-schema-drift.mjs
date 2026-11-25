@@ -1,21 +1,33 @@
 #!/usr/bin/env node
-// Usage: node scripts/check-d1-schema-drift.mjs --config apps/worker/wrangler.client.toml
+// Usage: node scripts/check-d1-schema-drift.mjs --client path/to/client.json
 // Compares the remote D1 tables/columns with packages/db/schema.sql. Read-only.
 // Exits 1 when tables or columns defined in schema.sql are missing remotely.
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, rmSync, readFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { COLUMNS_QUERY, columnsFromRows, tableColumns, diffSchemas } from './lib/schema-drift.mjs';
+import { clientWranglerInvocation } from './lib/with-client.mjs';
+import { renderWranglerToml } from './lib/render-wrangler.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
-const configIndex = process.argv.indexOf('--config');
-const config = configIndex > 0 ? process.argv[configIndex + 1] : undefined;
-if (!config) {
-  console.error('usage: check-d1-schema-drift.mjs --config <wrangler.client.toml>');
+const clientIndex = process.argv.indexOf('--client');
+const clientPath = clientIndex > 0 ? process.argv[clientIndex + 1] : undefined;
+if (!clientPath) {
+  console.error('usage: check-d1-schema-drift.mjs --client <client.json>');
   process.exit(1);
 }
+let invocation;
+try {
+  const config = JSON.parse(readFileSync(clientPath, 'utf8'));
+  invocation = clientWranglerInvocation(config, ['d1', 'execute', 'DB', '--remote', '--json', '--command', COLUMNS_QUERY]);
+  writeFileSync(join(root, invocation.configPath), renderWranglerToml(config));
+} catch (error) {
+  console.error(error.code ? `cannot read client config: ${error.code}` : error.message);
+  process.exit(1);
+}
+console.error(invocation.banner);
 
 const dir = mkdtempSync(join(tmpdir(), 'schema-drift-'));
 let expected;
@@ -27,11 +39,7 @@ try {
   rmSync(dir, { recursive: true, force: true });
 }
 
-const raw = execFileSync(
-  'pnpm',
-  ['exec', 'wrangler', 'd1', 'execute', 'DB', '--remote', '--json', '--config', config, '--command', COLUMNS_QUERY],
-  { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'inherit'] },
-);
+const raw = execFileSync('pnpm', invocation.argv, { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'inherit'] });
 const rows = JSON.parse(raw).flatMap((r) => r.results ?? []);
 const diff = diffSchemas(expected, columnsFromRows(rows));
 

@@ -72,7 +72,7 @@ npx create-line-harness
 
 ```bash
 npx wrangler d1 create line-crm
-pnpm db:migrate:client
+CLIENT_CONFIG=path/to/client.json pnpm db:migrate:client
 pnpm deploy:worker
 pnpm deploy:web
 ```

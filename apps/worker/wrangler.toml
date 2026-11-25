@@ -34,7 +34,7 @@ crons = ["*/5 * * * *"]
 
 # ═══════════════════════════════════════════════════════════════
 # 本番環境はこのファイルに書かない。
-# クライアントごとの client.json から wrangler.client.toml を生成してデプロイする:
+# クライアントごとの client.json から設定を毎回生成してデプロイする（scripts/with-client.mjs）:
 #   CLIENT_CONFIG=path/to/client.json pnpm deploy:client
 # 詳細: docs/superpowers/specs/2026-11-26-per-client-deployment-design.md
 # ═══════════════════════════════════════════════════════════════

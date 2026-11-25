@@ -15,10 +15,10 @@ AIコンシェルジュは、LINEで届いた質問が登録済みサービス�
 ## 1. D1を更新する
 
 AIコンシェルジュ用テーブルは `packages/db/d1-migrations/` の初期スキーマに含まれています。
-クライアント環境へは、生成済みの `apps/worker/wrangler.client.toml` を使って適用します。
+クライアント環境へは `client.json` を指定して適用します（既存DBの場合は先に `pnpm db:drift:client` で差分を確認）。
 
 ```bash
-pnpm db:migrate:client
+CLIENT_CONFIG=path/to/client.json pnpm db:migrate:client
 ```
 
 ## 2. AIプロバイダーを設定する
@@ -30,9 +30,9 @@ pnpm db:migrate:client
 個別に登録する場合は次のコマンドを使います。
 
 ```bash
-pnpm exec wrangler secret put OPENAI_API_KEY --config apps/worker/wrangler.client.toml
-pnpm exec wrangler secret put ANTHROPIC_API_KEY --config apps/worker/wrangler.client.toml
-pnpm exec wrangler secret put GEMINI_API_KEY --config apps/worker/wrangler.client.toml
+node scripts/with-client.mjs --client path/to/client.json -- secret put OPENAI_API_KEY
+node scripts/with-client.mjs --client path/to/client.json -- secret put ANTHROPIC_API_KEY
+node scripts/with-client.mjs --client path/to/client.json -- secret put GEMINI_API_KEY
 ```
 
 モデル名は秘密情報ではないため、`apps/worker/wrangler.toml` の環境変数で任意に変更できます。
@@ -86,8 +86,8 @@ AIコンシェルジュとは別に、外部からWorkerを呼ぶ経路もSecret
 | Stripe webhook | Cloudflare Secret `STRIPE_WEBHOOK_SECRET` | Stripe標準の `Stripe-Signature` |
 
 ```bash
-pnpm exec wrangler secret put MEET_CALLBACK_SECRET --config apps/worker/wrangler.client.toml
-pnpm exec wrangler secret put STRIPE_WEBHOOK_SECRET --config apps/worker/wrangler.client.toml
+node scripts/with-client.mjs --client path/to/client.json -- secret put MEET_CALLBACK_SECRET
+node scripts/with-client.mjs --client path/to/client.json -- secret put STRIPE_WEBHOOK_SECRET
 ```
 
 Incoming WebhookのSecretは作成・更新時だけ入力し、APIの応答では値ではなく `hasSecret` だけを返します。

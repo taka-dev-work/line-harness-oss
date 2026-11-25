@@ -8,9 +8,9 @@
     "dev:web": "pnpm --filter web dev",
     "build": "pnpm -r build",
     "deploy:worker": "pnpm --filter worker run deploy",
-    "deploy:client": "node scripts/render-wrangler-config.mjs --client \"$CLIENT_CONFIG\" --out apps/worker/wrangler.client.toml --web-env-out apps/web/.env.production.local && pnpm --filter web build && pnpm exec wrangler deploy --config apps/worker/wrangler.client.toml",
+    "deploy:client": "node scripts/with-client.mjs --client \"$CLIENT_CONFIG\" --web-env-out apps/web/.env.production.local --render-only && pnpm --filter web build && node scripts/with-client.mjs --client \"$CLIENT_CONFIG\" -- deploy",
     "deploy:web": "pnpm --filter web build",
-    "db:migrate:client": "pnpm exec wrangler d1 migrations apply DB --remote --config apps/worker/wrangler.client.toml",
+    "db:migrate:client": "node scripts/with-client.mjs --client \"$CLIENT_CONFIG\" -- d1 migrations apply DB --remote",
     "db:migrate:local": "pnpm exec wrangler d1 migrations apply DB --local --config apps/worker/wrangler.toml",
     "crm:validate:ai-line": "node scripts/validate-ai-line-crm-blueprint.mjs",
     "crm:check:ai-line": "node scripts/check-ai-line-crm-readiness.mjs",
@@ -18,7 +18,8 @@
     "crm:rich-menu:ai-line": "node scripts/export-ai-line-crm-rich-menu.mjs",
     "deploy:setup": "node packages/create-line-harness/dist/index.js",
     "deploy:update": "node packages/create-line-harness/dist/index.js update",
-    "test:scripts": "node --test 'scripts/**/*.test.mjs'"
+    "test:scripts": "node --test 'scripts/**/*.test.mjs'",
+    "db:drift:client": "node scripts/check-d1-schema-drift.mjs --client \"$CLIENT_CONFIG\""
   },
   "packageManager": "pnpm@9.15.4",
   "engines": {

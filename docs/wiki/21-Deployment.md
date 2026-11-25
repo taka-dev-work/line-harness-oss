@@ -228,7 +228,7 @@ https://line-harness.your-account.workers.dev
 ### リモート (本番)
 
 ```bash
-pnpm db:migrate:client
+CLIENT_CONFIG=path/to/client.json pnpm db:migrate:client
 # => wrangler d1 execute line-crm --file=packages/db/schema.sql
 ```
 

@@ -311,6 +311,6 @@ pnpm dev:web             # 管理画面ローカル起動
 pnpm build               # 全パッケージビルド
 pnpm deploy:worker       # Workers デプロイ
 pnpm deploy:web          # 管理画面ビルド
-pnpm db:migrate:client          # 本番D1にスキーマ適用
+CLIENT_CONFIG=path/to/client.json pnpm db:migrate:client          # 本番D1にスキーマ適用
 pnpm db:migrate:local    # ローカルD1にスキーマ適用
 ```

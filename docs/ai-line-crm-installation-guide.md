@@ -103,18 +103,24 @@ pnpm exec wrangler d1 create line-crm
 ```
 
 Put the returned `database_id` into the client's `client.json` as `d1DatabaseId`
-(see `scripts/lib/client-config.mjs` for the full schema), then render the config:
-
-```bash
-node scripts/render-wrangler-config.mjs --client path/to/client.json --out apps/worker/wrangler.client.toml
-```
+(see `scripts/lib/client-config.mjs` for the full schema). Every client command
+renders a fresh wrangler config from that file (`scripts/with-client.mjs`), so a
+config rendered for another client is never reused.
 
 Do not put production IDs into `apps/worker/wrangler.toml`.
+
+If the D1 database already existed before tracked migrations (any older install),
+check schema drift **first** and stop if it reports `DRIFT` (the baseline does not add
+missing columns to existing tables, but would still be recorded as applied):
+
+```bash
+CLIENT_CONFIG=path/to/client.json pnpm db:drift:client
+```
 
 Apply schema/migrations:
 
 ```bash
-pnpm db:migrate:client
+CLIENT_CONFIG=path/to/client.json pnpm db:migrate:client
 ```
 
 ## 5. Production Secrets
@@ -122,28 +128,28 @@ pnpm db:migrate:client
 Set these in Cloudflare Workers:
 
 ```bash
-pnpm exec wrangler secret put API_KEY --config apps/worker/wrangler.client.toml
-pnpm exec wrangler secret put LINE_CHANNEL_ACCESS_TOKEN --config apps/worker/wrangler.client.toml
-pnpm exec wrangler secret put LINE_CHANNEL_SECRET --config apps/worker/wrangler.client.toml
-pnpm exec wrangler secret put LINE_LOGIN_CHANNEL_ID --config apps/worker/wrangler.client.toml
-pnpm exec wrangler secret put LINE_LOGIN_CHANNEL_SECRET --config apps/worker/wrangler.client.toml
-pnpm exec wrangler secret put WORKER_URL --config apps/worker/wrangler.client.toml
-pnpm exec wrangler secret put LIFF_URL --config apps/worker/wrangler.client.toml
-pnpm exec wrangler secret put GEMINI_API_KEY --config apps/worker/wrangler.client.toml
+node scripts/with-client.mjs --client path/to/client.json -- secret put API_KEY
+node scripts/with-client.mjs --client path/to/client.json -- secret put LINE_CHANNEL_ACCESS_TOKEN
+node scripts/with-client.mjs --client path/to/client.json -- secret put LINE_CHANNEL_SECRET
+node scripts/with-client.mjs --client path/to/client.json -- secret put LINE_LOGIN_CHANNEL_ID
+node scripts/with-client.mjs --client path/to/client.json -- secret put LINE_LOGIN_CHANNEL_SECRET
+node scripts/with-client.mjs --client path/to/client.json -- secret put WORKER_URL
+node scripts/with-client.mjs --client path/to/client.json -- secret put LIFF_URL
+node scripts/with-client.mjs --client path/to/client.json -- secret put GEMINI_API_KEY
 ```
 
 Optional Google Calendar / Meet:
 
 ```bash
-pnpm exec wrangler secret put GOOGLE_SERVICE_ACCOUNT_EMAIL --config apps/worker/wrangler.client.toml
-pnpm exec wrangler secret put GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY --config apps/worker/wrangler.client.toml
-pnpm exec wrangler secret put GOOGLE_CALENDAR_ID --config apps/worker/wrangler.client.toml
+node scripts/with-client.mjs --client path/to/client.json -- secret put GOOGLE_SERVICE_ACCOUNT_EMAIL
+node scripts/with-client.mjs --client path/to/client.json -- secret put GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY
+node scripts/with-client.mjs --client path/to/client.json -- secret put GOOGLE_CALENDAR_ID
 ```
 
 Check:
 
 ```bash
-pnpm exec wrangler secret list --config apps/worker/wrangler.client.toml
+node scripts/with-client.mjs --client path/to/client.json -- secret list
 ```
 
 ## 6. Deploy
