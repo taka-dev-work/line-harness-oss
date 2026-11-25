@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { LineClient } from '@line-crm/line-sdk';
-import { getLineAccounts, getTrafficPoolBySlug, getRandomPoolAccount, getPoolAccounts } from '@line-crm/db';
+import { getLineAccounts, getTrafficPoolBySlug, getRandomPoolAccount, getPoolAccounts, deleteAuditLogsBefore } from '@line-crm/db';
 import { processStepDeliveries } from './services/step-delivery.js';
 import { processScheduledBroadcasts, processQueuedBroadcasts } from './services/broadcast.js';
 import { processReminderDeliveries } from './services/reminder-delivery.js';
@@ -9,6 +9,7 @@ import { checkAccountHealth } from './services/ban-monitor.js';
 import { refreshLineAccessTokens } from './services/token-refresh.js';
 import { processInsightFetch } from './services/insight-fetcher.js';
 import { authMiddleware } from './middleware/auth.js';
+import { auditMiddleware, auditRetentionCutoff } from './middleware/audit.js';
 import { rateLimitMiddleware } from './middleware/rate-limit.js';
 import { webhook } from './routes/webhook.js';
 import { friends } from './routes/friends.js';
@@ -83,6 +84,7 @@ export type Env = {
   };
   Variables: {
     staff: { id: string; name: string; role: 'owner' | 'admin' | 'staff' };
+    accessEmail?: string;
   };
 };
 
@@ -96,6 +98,7 @@ app.use('*', rateLimitMiddleware);
 
 // Auth middleware — skips /webhook and /docs automatically
 app.use('*', authMiddleware);
+app.use('*', auditMiddleware());
 
 // Mount route groups — MVP & Round 2
 app.route('/', webhook);
@@ -473,6 +476,12 @@ async function scheduled(
   env: Env['Bindings'],
   _ctx: ExecutionContext,
 ): Promise<void> {
+  try {
+    await deleteAuditLogsBefore(env.DB, auditRetentionCutoff(new Date()));
+  } catch (err) {
+    console.error('[audit] retention cleanup failed', err);
+  }
+
   // Get all active accounts from DB
   const dbAccounts = await getLineAccounts(env.DB);
 
