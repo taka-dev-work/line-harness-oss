@@ -2,6 +2,9 @@
 
 このチェックリストは、ローカル検証済みのAI LINE CRMを本番運用へ移すための最短手順です。
 
+
+導入・解約・障害対応・シークレット入れ替えの手順は [docs/runbooks/](runbooks/README.md) にまとめています。
+
 ## 1. 固定URLを決める
 
 Cloudflare Tunnel の一時URLではなく、Cloudflare Workers の固定URLまたは独自ドメインを使います。
@@ -50,8 +53,8 @@ node scripts/with-client.mjs --client path/to/client.json -- secret put LIFF_URL
 クライアントの `client.json` に本番D1の `d1DatabaseId` を書きます。wrangler の設定は各コマンドの実行時に `client.json` から毎回生成されます（前回の生成物は再利用しません）。
 
 既存のD1（以前のバージョンで作成したもの）に適用する場合は、**必ず先に**スキーマの差分を確認します。
-`DRIFT` と表示されたら移行を止め、不足している列を手作業で補ってから再確認してください
-（初期スキーマは既存テーブルに列を追加しないため、そのまま適用すると不足が残ったまま「適用済み」と記録されます）。
+`DRIFT` と表示されたら、マイグレーションを適用せずに [既存 D1 の移行手順](runbooks/client-0-adoption.md) へ進んでください
+（`pnpm db:adopt:client` が不足分を追加し、初期スキーマを適用済みとして記録します）。
 
 ```bash
 CLIENT_CONFIG=path/to/client.json pnpm db:drift:client

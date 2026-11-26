@@ -110,8 +110,9 @@ config rendered for another client is never reused.
 Do not put production IDs into `apps/worker/wrangler.toml`.
 
 If the D1 database already existed before tracked migrations (any older install),
-check schema drift **first** and stop if it reports `DRIFT` (the baseline does not add
-missing columns to existing tables, but would still be recorded as applied):
+check schema drift **first**. If it reports `DRIFT`, do not apply migrations; follow
+[docs/runbooks/client-0-adoption.md](runbooks/client-0-adoption.md), which uses `db:adopt:client`
+to add the missing tables/columns and record the baseline as applied:
 
 ```bash
 CLIENT_CONFIG=path/to/client.json pnpm db:drift:client
