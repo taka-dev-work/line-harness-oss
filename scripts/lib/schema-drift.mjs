@@ -47,3 +47,59 @@ export function diffSchemas(expected, actual) {
   const extraTables = [...actual.keys()].filter((t) => !expected.has(t));
   return { missingTables: missingTables.sort(), missingColumns: missingColumns.sort(), extraTables: extraTables.sort() };
 }
+
+// --- Remote D1 ---------------------------------------------------------------
+// Remote D1 refuses `pragma_table_info()` as a table-valued function (SQLITE_AUTH)
+// and caps compound SELECTs, so columns are read with one PRAGMA per table.
+
+export const TABLES_QUERY = "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name";
+const SAFE_TABLE = /^[A-Za-z_][A-Za-z0-9_]*$/;
+
+/** @param {string[]} tables */
+export function pragmaBatch(tables) {
+  return tables
+    .map((t) => {
+      if (!SAFE_TABLE.test(t)) throw new Error(`unsafe table name: ${t}`);
+      return `PRAGMA table_info("${t}");`;
+    })
+    .join('');
+}
+
+/**
+ * @param {string[]} tables
+ * @param {{results: {name: string}[]}[]} results
+ * @returns {{t: string, c: string}[]}
+ */
+export function rowsFromPragmaResults(tables, results) {
+  if (tables.length !== results.length) {
+    throw new Error(`expected ${tables.length} tables but ${results.length} results`);
+  }
+  return tables.flatMap((t, i) => (results[i].results ?? []).map((col) => ({ t, c: col.name })));
+}
+
+/** @param {string} stdout */
+export function parseWranglerJson(stdout) {
+  const parsed = JSON.parse(stdout.trim());
+  if (parsed && !Array.isArray(parsed) && parsed.error) {
+    const notes = (parsed.error.notes ?? []).map((n) => n.text).join('; ');
+    throw new Error(notes ? `${parsed.error.text}: ${notes}` : String(parsed.error.text));
+  }
+  return parsed;
+}
+
+/** wrangler args for a read-only remote statement */
+export const remoteQueryArgs = (command) => ['d1', 'execute', 'DB', '--remote', '--json', '--command', command];
+
+/**
+ * @param {(args: string[]) => string} run executes wrangler with args and returns stdout
+ * @returns {Map<string, Set<string>>}
+ */
+export function remoteTableColumns(run) {
+  const tables = parseWranglerJson(run(remoteQueryArgs(TABLES_QUERY)))
+    .flatMap((r) => r.results ?? [])
+    .map((r) => r.name)
+    .filter((t) => !IGNORED_TABLES.has(t) && !t.startsWith('sqlite_'));
+  if (tables.length === 0) return new Map();
+  const results = parseWranglerJson(run(remoteQueryArgs(pragmaBatch(tables))));
+  return columnsFromRows(rowsFromPragmaResults(tables, results));
+}
