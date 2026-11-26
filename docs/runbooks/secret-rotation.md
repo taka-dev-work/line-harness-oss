@@ -25,6 +25,7 @@ node scripts/with-client.mjs --client "$CLIENT_CONFIG" -- secret put <NAME>
 | `SUPABASE_SERVICE_KEY` | Supabase → Project Settings → API（画像保存に使う場合） | 管理画面から画像をアップロードできる | Supabase で旧キーを無効化（JWT シークレット再発行は全キーに影響するので注意） |
 | `IG_HARNESS_LINK_SECRET` | 自分で生成し、連携先にも同じ値を設定（使う場合のみ） | 連携先からのリクエストが通る | 上書きで旧値は無効 |
 | `API_KEY` | 自分で高エントロピーの値を生成 | オーナーがいる間は `401` になること（初期設定・復旧専用） | 上書きで旧値は無効 |
+| `LEGACY_API_KEY` | 旧バージョン互換用。ローテーションせず**削除**する: `secret delete LEGACY_API_KEY` | `API_KEY` と同じ条件で受け付けられるため、残しておくと復旧時に一緒に有効になる | 削除で無効 |
 
 Access のサービストークン（MCP・初期データ投入用）は Worker Secret ではなく、使う側の環境変数 `LINE_HARNESS_ACCESS_CLIENT_ID` / `LINE_HARNESS_ACCESS_CLIENT_SECRET` に入っています。Zero Trust → Access → Service Auth で新しいトークンを作り、使う側を入れ替えてから古いトークンを削除します。
 

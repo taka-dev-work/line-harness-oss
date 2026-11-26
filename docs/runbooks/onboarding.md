@@ -45,7 +45,11 @@ node scripts/with-client.mjs --client "$CLIENT_CONFIG" -- secret put LINE_CHANNE
 node scripts/with-client.mjs --client "$CLIENT_CONFIG" -- secret put LINE_CHANNEL_SECRET
 node scripts/with-client.mjs --client "$CLIENT_CONFIG" -- secret put LINE_LOGIN_CHANNEL_ID
 node scripts/with-client.mjs --client "$CLIENT_CONFIG" -- secret put LINE_LOGIN_CHANNEL_SECRET
+node scripts/with-client.mjs --client "$CLIENT_CONFIG" -- secret put WORKER_URL
+node scripts/with-client.mjs --client "$CLIENT_CONFIG" -- secret put LIFF_URL
 ```
+
+`WORKER_URL` は `https://<customDomain>`、`LIFF_URL` は LIFF のエンドポイント（または `https://<customDomain>`）。どちらも秘密ではないが、本番チェックリストと同じく Worker Secret として入れる（`client.json` には持たせない）。`LEGACY_API_KEY` は旧バージョン互換用なので、新規導入では**設定しない**。
 
 AI プロバイダーや Stripe、Google を使う場合も同じ方法で入れる（一覧は [secret-rotation.md](./secret-rotation.md)）。
 

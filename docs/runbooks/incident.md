@@ -9,7 +9,8 @@
 |---|---|
 | Cloudflare API トークン | Cloudflare ダッシュボードで失効し、新しいトークンを Environment secret に入れ直す |
 | スタッフキー | 管理画面のスタッフ一覧で「無効化」または「キー再生成」（API なら `POST /api/staff/<id>/regenerate-key`）|
-| オーナーキー全滅・乗っ取り | [本番チェックリスト §5b](../ai-line-crm-production-checklist.md) の復旧手順（全オーナー無効化 → `API_KEY` で入り直す）|
+| `API_KEY` / `LEGACY_API_KEY` の漏えいが疑われる | オーナーが1人でもいる間は使えないが、復旧で全オーナーを無効化すると**両方とも有効に戻る**。先に `API_KEY` を新しい値で上書きし、`LEGACY_API_KEY` は削除する（`secret delete LEGACY_API_KEY`）|
+| オーナーキー全滅・乗っ取り | 上の行を**先に**済ませてから、[本番チェックリスト §5b](../ai-line-crm-production-checklist.md) の復旧手順（全オーナー無効化 → 新しい `API_KEY` で入り直す → すぐにオーナーを作成）|
 | Access サービストークン | Zero Trust → Access → Service Auth で削除し、作り直す |
 | LINE チャネルアクセストークン | LINE Developers で再発行し、[secret-rotation.md](./secret-rotation.md) の手順で入れ替える |
 

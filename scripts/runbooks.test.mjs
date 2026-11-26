@@ -45,3 +45,21 @@ test('runbooks carry no identifiers, emails or keys (public repo)', () => {
     assert.doesNotMatch(body, /\blh_[0-9a-f]{8,}/, `${f}: staff key`);
   }
 });
+
+test('I-3: onboarding sets every secret the production checklist sets', () => {
+  const checklist = readFileSync(join(root, 'docs/ai-line-crm-production-checklist.md'), 'utf8');
+  const onboarding = read('onboarding.md');
+  for (const [, name] of checklist.matchAll(/secret put ([A-Z_]+)/g)) {
+    assert.match(onboarding, new RegExp(`secret put ${name}\\b`), `onboarding.md misses ${name}`);
+  }
+});
+
+test('I-4: incident and rotation runbooks cover LEGACY_API_KEY', () => {
+  for (const f of ['incident.md', 'secret-rotation.md']) assert.match(read(f), /LEGACY_API_KEY/, f);
+});
+
+test('I-2: legacy notes no longer promise every failure is caught before SQL is generated', () => {
+  const notes = read('legacy-d1-notes.md');
+  assert.match(notes, /行がある/);
+  assert.match(notes, /定数でない既定値/);
+});
