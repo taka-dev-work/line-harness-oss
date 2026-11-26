@@ -54,6 +54,7 @@ if (apply) {
   const exportFile = value('--export-file');
   if (!exportFile) fail('--apply requires --export-file <full d1 export taken just before this run>');
   if (!existsSync(exportFile) || statSync(exportFile).size === 0) fail(`--export-file is missing or empty: ${exportFile}`);
+  if (resolve(out) === resolve(exportFile)) fail('--out must differ from --export-file (it would overwrite the backup)');
   if (!value('--bookmark')) fail('--apply requires --bookmark <time-travel bookmark recorded just before this run>');
   if (value('--confirm') !== config.d1DatabaseName) fail(`--confirm must equal the d1 database name (${config.d1DatabaseName})`);
 }

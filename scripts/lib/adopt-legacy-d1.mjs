@@ -14,6 +14,9 @@ export const D1_MIGRATIONS_DDL = `CREATE TABLE IF NOT EXISTS d1_migrations(
 		applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
 )`;
 
+// PRAGMA table_info strips the parentheses of expression defaults, so accept only literals.
+const CONSTANT_DEFAULT = /^('([^']|'')*'|[+-]?(\d+(\.\d*)?|\.\d+)([eE][+-]?\d+)?|NULL|TRUE|FALSE|[xX]'[0-9a-fA-F]*')$/i;
+
 const q = (name) => `"${name}"`;
 const query = (db, statement) => {
   const out = execFileSync('sqlite3', ['-json', db, statement], { encoding: 'utf8' });
@@ -30,6 +33,14 @@ export function addColumnSql(table, col, fk) {
   if (col.pk) throw new Error(`cannot ADD COLUMN ${table}.${col.name}: column is part of the primary key`);
   if (col.notnull && col.dflt_value == null) {
     throw new Error(`cannot ADD COLUMN ${table}.${col.name}: NOT NULL without a default`);
+  }
+  // SQLite rejects these only when the table already has rows, so a rehearsal on an
+  // empty copy would not catch them: refuse up front.
+  if (col.dflt_value != null && !CONSTANT_DEFAULT.test(col.dflt_value.trim())) {
+    throw new Error(`cannot ADD COLUMN ${table}.${col.name}: non-constant default ${col.dflt_value} fails on a table with rows`);
+  }
+  if (fk && col.dflt_value != null && col.dflt_value.toUpperCase() !== 'NULL') {
+    throw new Error(`cannot ADD COLUMN ${table}.${col.name}: foreign key with a non-NULL default fails while foreign keys are enforced`);
   }
   let out = `ALTER TABLE ${q(table)} ADD COLUMN ${q(col.name)}`;
   if (col.type) out += ` ${col.type}`;
@@ -80,6 +91,9 @@ export function adoptionStatements(baselineDbPath, diff) {
     if (missingTables.has(table)) continue;
     const col = query(baselineDbPath, `SELECT * FROM pragma_table_info(${literal(table)}) WHERE name = ${literal(column)}`)[0];
     const def = columnDefinition(tableSql.get(table), column);
+    if (!col || !def) {
+      throw new Error(`cannot ADD COLUMN ${table}.${column}: definition not found in the baseline; add it by hand`);
+    }
     if (/\b(CHECK|UNIQUE|COLLATE|GENERATED)\b/i.test(def)) {
       throw new Error(`cannot ADD COLUMN ${table}.${column}: definition has a constraint ADD COLUMN cannot carry (${def})`);
     }

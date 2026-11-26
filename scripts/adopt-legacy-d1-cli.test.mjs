@@ -73,3 +73,9 @@ test('--persist-to is only allowed with --local', () => {
   assert.equal(r.status, 1);
   assert.match(r.stderr, /--persist-to requires --local/);
 });
+
+test('M-5: --out must not be the export file (would overwrite the backup)', () => {
+  const r = runCli(['--out', '$DIR/export.sql', '--apply', '--export-file', '$DIR/export.sql', '--bookmark', 'bm-1', '--confirm', 'ai-line-crm']);
+  assert.equal(r.status, 1);
+  assert.match(r.stderr, /--out must differ from --export-file/);
+});

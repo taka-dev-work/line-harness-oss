@@ -26,10 +26,28 @@ export function clientWranglerRunner(config, root, target = {}) {
     try {
       return execFileSync('pnpm', argv, { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
     } catch (error) {
-      // wrangler prints its JSON error on stdout; surface the Cloudflare text when present
-      if (error.stdout?.trim().startsWith('{')) parseWranglerJson(error.stdout);
-      throw new Error(`wrangler exited ${error.status}: ${String(error.stderr ?? '').trim().split('\n').at(-1)}`);
+      throw new Error(wranglerFailureMessage(error));
     }
   };
   return { banner: probe.banner + (target.local ? '  [LOCAL]' : ''), run };
+}
+
+/**
+ * Human-readable reason for a failed wrangler run: the Cloudflare JSON error on stdout
+ * when present, otherwise every `[ERROR]` line on stderr (wrangler prints a log-file
+ * hint after the error, so the last line alone hides the cause).
+ * @param {{status?: number, stdout?: string, stderr?: string}} error
+ */
+export function wranglerFailureMessage(error) {
+  const stdout = String(error.stdout ?? '').trim();
+  if (stdout.startsWith('{')) {
+    try {
+      parseWranglerJson(stdout);
+    } catch (parsed) {
+      if (!(parsed instanceof SyntaxError)) return `wrangler exited ${error.status}: ${parsed.message}`;
+    }
+  }
+  const lines = String(error.stderr ?? '').split('\n').map((l) => l.trim()).filter(Boolean);
+  const errors = lines.filter((l) => l.includes('[ERROR]'));
+  return `wrangler exited ${error.status}: ${(errors.length ? errors : lines.slice(-1)).join(' | ')}`;
 }

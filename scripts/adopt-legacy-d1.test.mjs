@@ -114,3 +114,49 @@ test('isAdopted checks for the baseline row', () => {
   assert.equal(isAdopted(['0001_auth_hardening.sql']), false);
   assert.equal(isAdopted([]), false);
 });
+
+// --- final review fixes ---
+function tinyBaseline(ddl) {
+  const dir = mkdtempSync(join(tmpdir(), 'adopt-'));
+  const db = join(dir, 'b.db');
+  sql(db, ddl);
+  return { dir, db };
+}
+
+test('I-2: refuses a missing column with a non-constant default', () => {
+  const { dir, db } = tinyBaseline("CREATE TABLE t (id TEXT PRIMARY KEY, created_at TEXT NOT NULL DEFAULT (datetime('now')), seen TEXT DEFAULT CURRENT_TIMESTAMP);");
+  try {
+    assert.throws(() => adoptionStatements(db, { missingTables: [], missingColumns: ['t.created_at'] }), /cannot ADD COLUMN t\.created_at: .*non-constant default/);
+    assert.throws(() => adoptionStatements(db, { missingTables: [], missingColumns: ['t.seen'] }), /cannot ADD COLUMN t\.seen: .*non-constant default/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('I-2: refuses a missing foreign-key column with a non-NULL default', () => {
+  const { dir, db } = tinyBaseline("CREATE TABLE p (id TEXT PRIMARY KEY); CREATE TABLE t (id TEXT PRIMARY KEY, p_id TEXT DEFAULT 'x' REFERENCES p (id));");
+  try {
+    assert.throws(() => adoptionStatements(db, { missingTables: [], missingColumns: ['t.p_id'] }), /cannot ADD COLUMN t\.p_id: .*foreign key/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('M-1: refuses when the column definition cannot be located (fails closed)', () => {
+  const { dir, db } = tinyBaseline('CREATE TABLE t (id TEXT PRIMARY KEY, -- note, with a comma\n  code TEXT);');
+  try {
+    assert.throws(() => adoptionStatements(db, { missingTables: [], missingColumns: ['t.code'] }), /cannot ADD COLUMN t\.code: .*definition not found/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('client-0 columns are still accepted', () => {
+  const { dir, db } = tinyBaseline("CREATE TABLE l (id TEXT PRIMARY KEY); CREATE TABLE f (id TEXT PRIMARY KEY, metadata TEXT NOT NULL DEFAULT '{}', l_id TEXT REFERENCES l (id) ON DELETE SET NULL, n INTEGER NOT NULL DEFAULT 0, x REAL DEFAULT -1.5);");
+  try {
+    const s = adoptionStatements(db, { missingTables: [], missingColumns: ['f.metadata', 'f.l_id', 'f.n', 'f.x'] });
+    assert.equal(s.filter((x) => x.startsWith('ALTER')).length, 4);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
