@@ -98,7 +98,7 @@ export function remoteTableColumns(run) {
   const tables = parseWranglerJson(run(remoteQueryArgs(TABLES_QUERY)))
     .flatMap((r) => r.results ?? [])
     .map((r) => r.name)
-    .filter((t) => !IGNORED_TABLES.has(t) && !t.startsWith('sqlite_'));
+    .filter((t) => !IGNORED_TABLES.has(t) && !t.startsWith('sqlite_') && !t.startsWith('_cf_'));
   if (tables.length === 0) return new Map();
   const results = parseWranglerJson(run(remoteQueryArgs(pragmaBatch(tables))));
   return columnsFromRows(rowsFromPragmaResults(tables, results));

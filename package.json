@@ -19,7 +19,8 @@
     "deploy:setup": "node packages/create-line-harness/dist/index.js",
     "deploy:update": "node packages/create-line-harness/dist/index.js update",
     "test:scripts": "node --test 'scripts/**/*.test.mjs'",
-    "db:drift:client": "node scripts/check-d1-schema-drift.mjs --client \"$CLIENT_CONFIG\""
+    "db:drift:client": "node scripts/check-d1-schema-drift.mjs --client \"$CLIENT_CONFIG\"",
+    "db:adopt:client": "node scripts/adopt-legacy-d1.mjs --client \"$CLIENT_CONFIG\""
   },
   "packageManager": "pnpm@9.15.4",
   "engines": {

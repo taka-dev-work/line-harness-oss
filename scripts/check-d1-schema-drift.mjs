@@ -4,13 +4,12 @@
 // Exits 1 when baseline tables or columns are missing remotely. Columns added by later
 // migrations are not expected here: `db:migrate:client` adds them.
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, rmSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { EXPECTED_SCHEMA_FILE, tableColumns, diffSchemas, remoteTableColumns, parseWranglerJson } from './lib/schema-drift.mjs';
-import { clientWranglerInvocation } from './lib/with-client.mjs';
-import { renderWranglerToml } from './lib/render-wrangler.mjs';
+import { EXPECTED_SCHEMA_FILE, tableColumns, diffSchemas, remoteTableColumns } from './lib/schema-drift.mjs';
+import { clientWranglerRunner } from './lib/client-runner.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const clientIndex = process.argv.indexOf('--client');
@@ -19,28 +18,14 @@ if (!clientPath) {
   console.error('usage: check-d1-schema-drift.mjs --client <client.json>');
   process.exit(1);
 }
-let config;
+let runner;
 try {
-  config = JSON.parse(readFileSync(clientPath, 'utf8'));
-  const probe = clientWranglerInvocation(config, ['d1', 'list']);
-  writeFileSync(join(root, probe.configPath), renderWranglerToml(config));
-  console.error(probe.banner);
+  runner = clientWranglerRunner(JSON.parse(readFileSync(clientPath, 'utf8')), root);
 } catch (error) {
   console.error(error.code ? `cannot read client config: ${error.code}` : error.message);
   process.exit(1);
 }
-
-// Runs one read-only wrangler command against the client's D1 and returns stdout.
-// On failure wrangler still prints its JSON error on stdout; surface its text.
-function run(args) {
-  const { argv } = clientWranglerInvocation(config, args);
-  try {
-    return execFileSync('pnpm', argv, { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
-  } catch (error) {
-    if (error.stdout) parseWranglerJson(error.stdout);
-    throw new Error(`wrangler exited ${error.status}`);
-  }
-}
+console.error(runner.banner);
 
 const dir = mkdtempSync(join(tmpdir(), 'schema-drift-'));
 let expected;
@@ -54,7 +39,7 @@ try {
 
 let actual;
 try {
-  actual = remoteTableColumns(run);
+  actual = remoteTableColumns(runner.run);
 } catch (error) {
   console.error(`remote schema read failed: ${error.message}`);
   process.exit(1);

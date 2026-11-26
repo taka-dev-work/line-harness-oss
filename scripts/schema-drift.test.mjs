@@ -79,3 +79,15 @@ test('remoteTableColumns queries tables then one pragma batch, skipping bookkeep
   assert.equal(calls[0].at(-1), TABLES_QUERY);
   assert.equal(calls[1].at(-1), 'PRAGMA table_info("friends");');
 });
+
+test('remoteTableColumns skips every Cloudflare-internal _cf_ table', () => {
+  const calls = [];
+  const run = (args) => {
+    calls.push(args);
+    return calls.length === 1
+      ? JSON.stringify([{ results: [{ name: '_cf_METADATA' }, { name: '_cf_KV' }, { name: 'tags' }] }])
+      : JSON.stringify([{ results: [{ name: 'id' }] }]);
+  };
+  assert.deepEqual([...remoteTableColumns(run).keys()], ['tags']);
+  assert.equal(calls[1].at(-1), 'PRAGMA table_info("tags");');
+});
